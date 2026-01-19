@@ -39,9 +39,9 @@ async def create_project(
         **payload.dict(),
         "name_normalized": name_norm,
         "client_name_normalized": client_norm,
+        "status": "DRAFT",
         "company_id": ObjectId(user["company_id"]),
         "created_by": ObjectId(user["_id"]),
-        "status": "DRAFT",
         "created_at": datetime.utcnow()
     }
 
