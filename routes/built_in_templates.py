@@ -5,7 +5,7 @@ from database.mongo import built_in_templates_collection
 from dependencies import get_current_user
 
 router = APIRouter(
-    prefix="/api/built_in_templates",
+    prefix="/api/built-in-templates",
     tags=["Templates"]
 )
 
@@ -38,3 +38,4 @@ async def get_builtin_templates(user=Depends(get_current_user)):
     return {
         "templates": templates
     }
+
