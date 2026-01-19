@@ -14,7 +14,7 @@ app = FastAPI(title="Estimly Backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
+        "http://localhost:8000",
         # "https://app.yourdomain.com"  # production frontend
     ],
     allow_credentials=True,
