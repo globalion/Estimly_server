@@ -15,6 +15,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:5000"
         # "https://app.yourdomain.com"  # production frontend
     ],
     allow_credentials=True,
@@ -30,6 +31,3 @@ app.include_router(project_router)
 app.include_router(built_in_templates_router)
 app.include_router(admin_built_in_templates_router)
 
-@app.get("/api/health")
-def health_check():
-    return {"status": "connected"}
