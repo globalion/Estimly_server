@@ -2,19 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from bson import ObjectId
 from pymongo import ReturnDocument
-
 from database.mongo import projects_collection
 from dependencies import get_current_user
-from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
-from utils.serializers import serialize_project
+from schemas.project import ProjectCreate, ProjectUpdate
+from utils.serializers import serialize_ids_only
 
-router = APIRouter(prefix="/projects", tags=["Projects"])
+router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
 def normalize(text: str) -> str:
     return text.strip().lower()
 
 # Create Project
-@router.post("/", response_model=ProjectResponse)
+@router.post("/")
 async def create_project(
     payload: ProjectCreate,
     user=Depends(get_current_user)
@@ -46,13 +45,14 @@ async def create_project(
     }
 
     result = await projects_collection.insert_one(project)
-    project["_id"] = result.inserted_id
 
-    return serialize_project(project)
-
+    return {
+        "message": "Project added successfully",
+        "project_id": str(result.inserted_id)
+    }
 
 # Get All Projects
-@router.get("/", response_model=list[ProjectResponse])
+@router.get("/")
 async def get_projects(
     page: int = 1,
     limit: int = 10,
@@ -72,11 +72,11 @@ async def get_projects(
     )
 
     projects = await cursor.to_list(length=limit)
-    return [serialize_project(p) for p in projects]
+    return [serialize_ids_only(p) for p in projects]
 
 
 # Get Single Project
-@router.get("/{project_id}", response_model=ProjectResponse)
+@router.get("/{project_id}")
 async def get_project(
     project_id: str,
     user=Depends(get_current_user)
@@ -89,11 +89,11 @@ async def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return serialize_project(project)
+    return serialize_ids_only(project)
 
 
 # Update Project
-@router.patch("/{project_id}", response_model=ProjectResponse)
+@router.patch("/{project_id}")
 async def update_project(
     project_id: str,
     payload: ProjectUpdate,
@@ -122,7 +122,7 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return serialize_project(project)
+    return serialize_ids_only(project)
 
 
 # Delete Project
