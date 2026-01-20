@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
-from bson import ObjectId
-
 from database.mongo import built_in_templates_collection
+from utils.serializers import serialize_ids_only
 from dependencies import get_current_user
 
 router = APIRouter(
@@ -9,16 +8,14 @@ router = APIRouter(
     tags=["Templates"]
 )
 
-@router.get("")
+@router.get("/")
 async def get_builtin_templates(user=Depends(get_current_user)):
     """
     Global endpoint
     Returns all ACTIVE built-in templates
     """
     cursor = built_in_templates_collection.find(
-        {
-            "status": "active"  # filter
-        },
+        {"status": "active"},
         {
             "_id": 1,
             "name": 1,
@@ -31,11 +28,4 @@ async def get_builtin_templates(user=Depends(get_current_user)):
     )
 
     templates = await cursor.to_list(length=None)
-
-    for t in templates:
-        t["id"] = str(t.pop("_id"))
-
-    return {
-        "templates": templates
-    }
-
+    return [serialize_ids_only(t) for t in templates]
