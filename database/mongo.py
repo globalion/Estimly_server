@@ -13,3 +13,4 @@ users_collection = db.users
 companies_collection = db.companies
 projects_collection = db.projects
 built_in_templates_collection = db.built_in_templates
+custom_templates_collection = db.custom_templates
