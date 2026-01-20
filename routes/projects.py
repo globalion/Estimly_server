@@ -7,6 +7,7 @@ from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.serializers import serialize_ids_only
 
+
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
 def normalize(text: str) -> str:
