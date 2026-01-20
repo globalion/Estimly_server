@@ -72,7 +72,7 @@ async def login(payload: LoginRequest):
         {"email": payload.email}
     )
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=404, detail="Email not registered. Please sign up first.")
 
     if not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
