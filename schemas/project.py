@@ -13,7 +13,6 @@ class ProjectCreate(BaseModel):
     negotiation_buffer: float
     estimated_team_size: int
 
-
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     client_name: Optional[str] = None
@@ -24,20 +23,3 @@ class ProjectUpdate(BaseModel):
     negotiation_buffer: Optional[float] = None
     estimated_team_size: Optional[int] = None
     status: Optional[str] = None
-
-class ProjectResponse(BaseModel):
-    id: str
-    name: str
-    client_name: str
-    description: Optional[str]
-
-    estimation_technique: str
-    target_margin: float
-    risk_buffer: float
-    negotiation_buffer: float
-    estimated_team_size: int
-
-    status: str
-    company_id: str
-    created_by: str
-    created_at: datetime
