@@ -21,3 +21,10 @@ class CustomTemplateCreate(BaseModel):
     default_margin: float
     default_risk_buffer: float
     modules: List[ModuleSchema]
+
+class CustomTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    default_margin: Optional[float] = None
+    default_risk_buffer: Optional[float] = None
+    modules: Optional[List[ModuleSchema]] = None

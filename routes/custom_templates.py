@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from bson import ObjectId
-
+from pymongo import ReturnDocument
 from schemas.custom_template import CustomTemplateCreate
+from schemas.custom_template import CustomTemplateUpdate
 from database.mongo import custom_templates_collection
 from utils.serializers import serialize_ids_only
 from dependencies import get_current_user
@@ -63,7 +64,7 @@ async def get_custom_templates(
 
 
 # Get Single Template
-@router.get("/api/{template_id}")
+@router.get("/{template_id}")
 async def get_custom_template_by_id(
     template_id: str,
     user=Depends(get_current_user)
@@ -82,8 +83,39 @@ async def get_custom_template_by_id(
     return serialize_ids_only(template)
 
 
+# Update Template
+@router.patch("/{template_id}")
+async def update_custom_template(
+    template_id: str,
+    payload: CustomTemplateUpdate,
+    user=Depends(get_current_user)
+):
+    # Extract only fields sent by frontend
+    update_data = payload.dict(exclude_unset=True)
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data provided for update")
+
+    update_data["updated_at"] = datetime.utcnow()
+
+    # Update and return updated document in ONE db call
+    template = await custom_templates_collection.find_one_and_update(
+        {
+            "_id": ObjectId(template_id),
+            "company_id": ObjectId(user["company_id"])
+        },
+        {"$set": update_data},
+        return_document=ReturnDocument.AFTER
+    )
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    return serialize_ids_only(template)
+
+
 # Delete Template
-@router.delete("/api/{template_id}")
+@router.delete("/{template_id}")
 async def delete_custom_template(
     template_id: str,
     user=Depends(get_current_user)
