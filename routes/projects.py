@@ -110,7 +110,9 @@ async def update_project(
 
     if "client_name" in update_data:
         update_data["client_name_normalized"] = normalize(update_data["client_name"])
-
+        
+    update_data["updated_at"] = datetime.utcnow()
+    
     project = await projects_collection.find_one_and_update(
         {
             "_id": ObjectId(project_id),
