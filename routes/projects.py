@@ -125,8 +125,10 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return serialize_ids_only(project)
-
+    return {
+        "message": "Project updated successfully",
+        "project": serialize_ids_only(project)
+    }
 
 # Delete Project
 @router.delete("/{project_id}")
