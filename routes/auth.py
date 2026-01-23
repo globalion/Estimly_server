@@ -130,4 +130,3 @@ async def reset_password(payload: ResetPasswordRequest):
     )
 
     return {"message": "Password reset successful"}
-s
