@@ -40,7 +40,7 @@ async def create_project(
         **payload.dict(),
         "name_normalized": name_norm,
         "client_name_normalized": client_norm,
-        "status": "DRAFT",
+        "status": "draft",
         "company_id": ObjectId(user["company_id"]),
         "created_by": ObjectId(user["_id"]),
         "created_at": now,
@@ -110,9 +110,12 @@ async def update_project(
     if "name" in update_data:
         update_data["name_normalized"] = normalize(update_data["name"])
 
+    if "status" in update_data:
+        update_data["status"] = update_data["status"].strip().lower()
+
     if "client_name" in update_data:
         update_data["client_name_normalized"] = normalize(update_data["client_name"])
-        
+      
     update_data["updated_at"] = datetime.utcnow()
     
     project = await projects_collection.find_one_and_update(
