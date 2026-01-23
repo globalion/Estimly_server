@@ -90,7 +90,7 @@ async def update_custom_template(
     payload: CustomTemplateUpdate,
     user=Depends(get_current_user)
 ):
-    # Extract only fields sent by frontend
+   # Extract only fields sent by frontend
     update_data = payload.dict(exclude_unset=True)
 
     if not update_data:
@@ -111,7 +111,10 @@ async def update_custom_template(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    return serialize_ids_only(template)
+    return {
+        "message": "Template updated successfully",
+        "data": serialize_ids_only(template)
+    }
 
 
 # Delete Template
