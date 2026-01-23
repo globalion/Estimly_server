@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 class SignupRequest(BaseModel):
     full_name: str
@@ -16,3 +16,18 @@ class UserResponse(BaseModel):
     email: EmailStr
     role: str
     company_id: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    confirm_new_password: str
+
+    @field_validator("confirm_new_password")
+    @classmethod
+    def passwords_match(cls, confirm_new_password, info):
+        if confirm_new_password != info.data.get("new_password"):
+            raise ValueError("Passwords do not match")
+        return confirm_new_password

@@ -7,28 +7,29 @@ from schemas.auth import SignupRequest, LoginRequest, UserResponse
 from utils.security import hash_password, verify_password
 from utils.jwt import create_access_token
 
+from utils.password_reset import create_reset_token, verify_reset_token
+from utils.email import send_reset_email
+from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
+
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 def normalize(text: str) -> str:
     return text.strip().lower()
 
-# Signup
+# -------------------------
+# Signup Endpoint
+# -------------------------
 @router.post("/signup", response_model=UserResponse)
 async def signup(payload: SignupRequest):
-
-    # 1. Email uniqueness
-    existing_user = await users_collection.find_one(
-        {"email": payload.email}
-    )
+    # 1. Check email uniqueness
+    existing_user = await users_collection.find_one({"email": payload.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     company_name_norm = normalize(payload.company_name)
 
     # 2. Find company
-    company = await companies_collection.find_one(
-        {"name_normalized": company_name_norm}
-    )
+    company = await companies_collection.find_one({"name_normalized": company_name_norm})
 
     # 3. Create company if not exists
     if not company:
@@ -53,7 +54,6 @@ async def signup(payload: SignupRequest):
         "company_id": company_id,
         "created_at": datetime.utcnow()
     }
-
     user_result = await users_collection.insert_one(user_doc)
 
     return UserResponse(
@@ -64,17 +64,13 @@ async def signup(payload: SignupRequest):
         company_id=str(company_id)
     )
 
-# Login
+# -------------------------
+# Login Endpoint
+# -------------------------
 @router.post("/login")
 async def login(payload: LoginRequest):
-
-    user = await users_collection.find_one(
-        {"email": payload.email}
-    )
-    if not user:
-        raise HTTPException(status_code=404, detail="Email not registered. Please sign up first.")
-
-    if not verify_password(payload.password, user["password_hash"]):
+    user = await users_collection.find_one({"email": payload.email})
+    if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({
@@ -93,3 +89,45 @@ async def login(payload: LoginRequest):
             "company_id": str(user["company_id"])
         }
     }
+
+# -------------------------
+# Forgot Password
+# -------------------------
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    user = await users_collection.find_one({"email": payload.email})
+    
+    # Security: always respond the same
+    if not user:
+        return {"message": "If the email exists, a reset link has been sent"}
+
+    # Generate JWT reset token
+    token = create_reset_token(payload.email)
+
+    reset_link = f"http://localhost:3000/reset-password?token={token}"
+
+    # Send reset email
+    await send_reset_email(payload.email, reset_link)
+
+    return {"message": "If the email exists, a reset link has been sent"}
+
+# -------------------------
+# Reset Password
+# -------------------------
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    email = verify_reset_token(payload.token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user = await users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password)}}
+    )
+
+    return {"message": "Password reset successful"}
+s
