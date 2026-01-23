@@ -7,7 +7,6 @@ from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.serializers import serialize_ids_only
 
-
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
 def normalize(text: str) -> str:
@@ -34,6 +33,8 @@ async def create_project(
             status_code=409,
             detail="Project with same name already exists for this client"
         )
+    
+    now = datetime.utcnow()
 
     project = {
         **payload.dict(),
@@ -42,7 +43,8 @@ async def create_project(
         "status": "DRAFT",
         "company_id": ObjectId(user["company_id"]),
         "created_by": ObjectId(user["_id"]),
-        "created_at": datetime.utcnow()
+        "created_at": now,
+        "updated_at": now
     }
 
     result = await projects_collection.insert_one(project)
