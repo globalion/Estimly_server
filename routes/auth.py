@@ -123,6 +123,13 @@ async def reset_password(payload: ResetPasswordRequest):
     user = await users_collection.find_one({"email": email})
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
+    
+    #  CHECK: new password should NOT be same as old password
+    if verify_password(payload.new_password, user["password_hash"]):
+        raise HTTPException(
+            status_code=400,
+            detail="New password cannot be the same as your old password"
+        )
 
     await users_collection.update_one(
         {"_id": user["_id"]},
