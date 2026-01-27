@@ -129,4 +129,4 @@ async def reset_password(payload: ResetPasswordRequest):
         {"$set": {"password_hash": hash_password(payload.new_password)}}
     )
 
-    return {"message": "Password reset successful"}
+    return {"success": True, "message": "Password reset successfully"}  
