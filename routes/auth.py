@@ -6,19 +6,14 @@ from database.mongo import users_collection, companies_collection
 from schemas.auth import SignupRequest, LoginRequest, UserResponse
 from utils.security import hash_password, verify_password
 from utils.auth_jwt import create_access_token
-
+from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
 from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-def normalize(text: str) -> str:
-    return text.strip().lower()
-
-# -------------------------
 # Signup Endpoint
-# -------------------------
 @router.post("/signup", response_model=UserResponse)
 async def signup(payload: SignupRequest):
     # 1. Check email uniqueness
@@ -31,12 +26,20 @@ async def signup(payload: SignupRequest):
     # 2. Find company
     company = await companies_collection.find_one({"name_normalized": company_name_norm})
 
+    now = datetime.utcnow()
+
     # 3. Create company if not exists
     if not company:
         company_doc = {
             "name": payload.company_name,
             "name_normalized": company_name_norm,
-            "created_at": datetime.utcnow()
+            "industry": None,
+            "company_size": None,
+            "currency": "USD",
+            "date_format": "MM/DD/YYYY",
+            "timezone": "UTC",
+            "created_at": now,
+            "updated_at": now
         }
         company_result = await companies_collection.insert_one(company_doc)
         company_id = company_result.inserted_id
@@ -64,9 +67,8 @@ async def signup(payload: SignupRequest):
         company_id=str(company_id)
     )
 
-# -------------------------
+
 # Login Endpoint
-# -------------------------
 @router.post("/login")
 async def login(payload: LoginRequest):
     user = await users_collection.find_one({"email": payload.email})
@@ -90,9 +92,8 @@ async def login(payload: LoginRequest):
         }
     }
 
-# -------------------------
+
 # Forgot Password
-# -------------------------
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
     user = await users_collection.find_one({"email": payload.email})
@@ -111,9 +112,8 @@ async def forgot_password(payload: ForgotPasswordRequest):
 
     return {"message": "If the email exists, a reset link has been sent"}
 
-# -------------------------
+
 # Reset Password
-# -------------------------
 @router.post("/reset-password")
 async def reset_password(payload: ResetPasswordRequest):
     email = verify_reset_token(payload.token)
