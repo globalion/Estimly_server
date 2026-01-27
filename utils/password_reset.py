@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from jose import jwt
 from decouple import config
 
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = config("PW_RESET_SECRET_KEY")
 ALGORITHM = "HS256"
 RESET_TOKEN_EXPIRE_MINUTES = 30
 

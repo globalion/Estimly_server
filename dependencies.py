@@ -4,7 +4,7 @@ from jose import jwt
 from bson import ObjectId
 
 from database.mongo import users_collection
-from utils.jwt import SECRET_KEY, ALGORITHM
+from utils.auth_jwt import SECRET_KEY, ALGORITHM
 
 security = HTTPBearer()
 

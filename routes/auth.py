@@ -5,7 +5,7 @@ from bson import ObjectId
 from database.mongo import users_collection, companies_collection
 from schemas.auth import SignupRequest, LoginRequest, UserResponse
 from utils.security import hash_password, verify_password
-from utils.jwt import create_access_token
+from utils.auth_jwt import create_access_token
 
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
