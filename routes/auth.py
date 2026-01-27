@@ -100,7 +100,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
     
     # Security: always respond the same
     if not user:
-        return {"message": "If the email exists, a reset link has been sent"}
+        return {"success": False, "message": "Email is not registered"}
 
     # Generate JWT reset token
     token = create_reset_token(payload.email)
@@ -110,7 +110,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
     # Send reset email
     await send_reset_email(payload.email, reset_link)
 
-    return {"message": "If the email exists, a reset link has been sent"}
+    return {"success": True, "message": "Reset link sent to your email"}
 
 
 # Reset Password

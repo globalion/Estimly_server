@@ -5,11 +5,11 @@ conf = ConnectionConfig(
     MAIL_USERNAME=config("MAIL_USERNAME"),
     MAIL_PASSWORD=config("MAIL_PASSWORD"),
     MAIL_FROM=config("MAIL_FROM"),
-    MAIL_PORT=587,
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_STARTTLS=True,   # <-- use this instead of MAIL_TLS
-    MAIL_SSL_TLS=False,   # <-- use this instead of MAIL_SSL
-    USE_CREDENTIALS=True
+    MAIL_PORT=config("MAIL_PORT", cast=int),
+    MAIL_SERVER=config("MAIL_SERVER"),
+    MAIL_STARTTLS=config("MAIL_STARTTLS", cast=bool),  # False for SSL
+    MAIL_SSL_TLS=config("MAIL_SSL_TLS", cast=bool),    # True for SSL
+    USE_CREDENTIALS=config("USE_CREDENTIALS", cast=bool),
 )
 
 async def send_reset_email(email: str, reset_link: str):
@@ -18,14 +18,11 @@ async def send_reset_email(email: str, reset_link: str):
         recipients=[email],
         body=f"""
         <p>You requested a password reset.</p>
-        <p>
-            <a href="{reset_link}">
-                Click here to reset your password
-            </a>
-        </p>
+        <p><a href="{reset_link}">Click here to reset your password</a></p>
         <p>This link expires in 30 minutes.</p>
         """,
-        subtype="html"
+        subtype="html",
     )
+
     fm = FastMail(conf)
     await fm.send_message(message)
