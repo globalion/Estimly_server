@@ -13,7 +13,7 @@ async def get_user_info(
     user=Depends(get_current_user)
 ):
     db_user = await users_collection.find_one(
-        {"_id": ObjectId(user["id"])},
+        {"_id": ObjectId(user["_id"])},   
         {"full_name": 1, "role": 1}
     )
 
@@ -21,6 +21,6 @@ async def get_user_info(
         raise HTTPException(status_code=404, detail="User not found")
 
     return {
-        "name": db_user.get("full_name"),
-        "role": db_user.get("role")
+        "name": db_user["full_name"],
+        "role": db_user["role"]
     }
