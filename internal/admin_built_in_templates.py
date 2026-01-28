@@ -6,6 +6,7 @@ from database.mongo import built_in_templates_collection
 from internal.admin_security import internal_admin_auth
 from schemas.built_in_template import BuiltInTemplateCreate
 from schemas.built_in_template import BuiltInTemplateUpdate
+from utils.serializers import serialize_ids_only
 
 admin_built_in_templates_router = APIRouter(
     prefix="/internal/admin/built-in-templates",
@@ -18,22 +19,14 @@ async def get_all_built_in_templates(
     _=Depends(internal_admin_auth)
 ):
     templates = await built_in_templates_collection.find({}).to_list(length=None)
-
-    for t in templates:
-        t["_id"] = str(t["_id"])
-
-    return templates
+    return [serialize_ids_only(t) for t in templates]
 
 
-# Post
 @admin_built_in_templates_router.post("")
 async def add_built_in_template(
     payload: BuiltInTemplateCreate,
     _=Depends(internal_admin_auth)
 ):
-    if not payload.name:
-        raise HTTPException(400, "Template name is required")
-
     exists = await built_in_templates_collection.find_one({
         "name": payload.name,
         "status": "active"
@@ -42,26 +35,67 @@ async def add_built_in_template(
     if exists:
         raise HTTPException(400, "Built-in template already exists")
 
+    now = datetime.utcnow()
+
     doc = {
-        "_id": ObjectId(),
         "name": payload.name,
         "description": payload.description,
-        "modules": payload.modules,
-        "addons": [addon.dict() for addon in payload.addons],  # ✅ FIX
         "default_margin": payload.default_margin,
-        "risk_buffer": payload.risk_buffer,
+        "default_risk_buffer": payload.default_risk_buffer,
+        "modules": [m.model_dump() for m in payload.modules],
+        "add_ons": [a.model_dump() for a in payload.add_ons],
         "status": "active",
-        "created_by": "estimly",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "created_by": "system",
+        "created_at": now,
+        "updated_at": now
     }
 
-    await built_in_templates_collection.insert_one(doc)
+    result = await built_in_templates_collection.insert_one(doc)
 
     return {
         "message": "Built-in template added successfully",
-        "template_id": str(doc["_id"])
+        "template_id": str(result.inserted_id)
     }
+
+
+
+# # Post
+# @admin_built_in_templates_router.post("")
+# async def add_built_in_template(
+#     payload: BuiltInTemplateCreate,
+#     _=Depends(internal_admin_auth)
+# ):
+#     if not payload.name:
+#         raise HTTPException(400, "Template name is required")
+
+#     exists = await built_in_templates_collection.find_one({
+#         "name": payload.name,
+#         "status": "active"
+#     })
+
+#     if exists:
+#         raise HTTPException(400, "Built-in template already exists")
+
+#     doc = {
+#         "_id": ObjectId(),
+#         "name": payload.name,
+#         "description": payload.description,
+#         "modules": payload.modules,
+#         "addons": [addon.dict() for addon in payload.addons], 
+#         "default_margin": payload.default_margin,
+#         "risk_buffer": payload.risk_buffer,
+#         "status": "active",
+#         "created_by": "estimly",
+#         "created_at": datetime.utcnow(),
+#         "updated_at": datetime.utcnow()
+#     }
+
+#     await built_in_templates_collection.insert_one(doc)
+
+#     return {
+#         "message": "Built-in template added successfully",
+#         "template_id": str(doc["_id"])
+#     }
 
 
 # Patch
