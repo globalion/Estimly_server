@@ -35,8 +35,18 @@ async def create_project(
     now = datetime.utcnow()
 
     project = {
-         **payload.dict(),
-        "modules": payload.modules,   
+        #  **payload.dict(),
+         **payload.model_dump(mode="json"),
+   
+
+        # "template_id": ObjectId(payload.template_id) if payload.template_id else None,
+        "template_name": payload.template_name,
+        # "template_type": payload.template_type,
+
+       "modules": [
+        module.model_dump(mode="json") for module in payload.modules
+        ],
+
         "name_normalized": name_norm,
         "client_name_normalized": client_norm,
         "status": "draft",

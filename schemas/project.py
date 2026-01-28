@@ -27,6 +27,11 @@ class ProjectCreate(BaseModel):
     risk_buffer: float
     negotiation_buffer: float
     estimated_team_size: int
+
+    #  template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    # template_type: Optional[str] = None 
+    
     modules: List[ProjectModuleSchema]
 
 
