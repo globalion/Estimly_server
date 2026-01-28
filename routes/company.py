@@ -45,4 +45,7 @@ async def update_company(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    return serialize_ids_only(company)
+    return {
+        "message": "Company data updated successfully",
+        "data": serialize_ids_only(company)
+    }
