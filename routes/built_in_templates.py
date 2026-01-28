@@ -21,9 +21,9 @@ async def get_builtin_templates(user=Depends(get_current_user)):
             "name": 1,
             "description": 1,
             "default_margin": 1,
-            "risk_buffer": 1,
+            "default_risk_buffer": 1,
             "modules": 1,
-            "addons": 1,
+            "add_ons": 1,
         }
     )
 
