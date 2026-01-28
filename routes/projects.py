@@ -35,7 +35,8 @@ async def create_project(
     now = datetime.utcnow()
 
     project = {
-        **payload.dict(),
+         **payload.dict(),
+        "modules": payload.modules,   
         "name_normalized": name_norm,
         "client_name_normalized": client_norm,
         "status": "draft",

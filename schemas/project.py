@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional, List
 from datetime import datetime
 
 class ProjectCreate(BaseModel):
@@ -13,6 +13,8 @@ class ProjectCreate(BaseModel):
     negotiation_buffer: float
     estimated_team_size: int
 
+    modules: List[Any] = []  
+
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     client_name: Optional[str] = None
@@ -23,3 +25,5 @@ class ProjectUpdate(BaseModel):
     negotiation_buffer: Optional[float] = None
     estimated_team_size: Optional[int] = None
     status: Optional[str] = None
+
+    modules: Optional[List[Any]] = None   
