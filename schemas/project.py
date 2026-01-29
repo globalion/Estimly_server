@@ -17,12 +17,16 @@ class ProjectModuleSchema(BaseModel):
     name: str
     features: List[ProjectFeatureSchema]
 
+class EstimationTechniqueSnapshot(BaseModel):
+    name: str
+    standard: Optional[str] = None
+    description: Optional[str] = None
 
 class ProjectCreate(BaseModel):
     name: str
     client_name: str
     description: Optional[str] = None
-    estimation_technique: str
+    estimation_technique: EstimationTechniqueSnapshot
     target_margin: float
     risk_buffer: float
     negotiation_buffer: float
@@ -39,7 +43,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     client_name: Optional[str] = None
     description: Optional[str] = None
-    estimation_technique: Optional[str] = None
+    estimation_technique: Optional[EstimationTechniqueSnapshot] = None
     target_margin: Optional[float] = None
     risk_buffer: Optional[float] = None
     negotiation_buffer: Optional[float] = None
