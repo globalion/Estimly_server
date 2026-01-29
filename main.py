@@ -10,6 +10,9 @@ from routes.custom_templates import router as custom_template_router
 from routes.dashboard import router as dashboard_router
 from routes.built_in_templates import router as built_in_templates_router
 from internal.admin_built_in_templates import admin_built_in_templates_router
+from routes.estimation_techniques import router as estimation_techniques_router
+from internal.admin_estimation_techniques import admin_estimation_techniques_router
+
 
 app = FastAPI(title="Estimly Backend")
 
@@ -34,6 +37,8 @@ app.include_router(project_router)
 app.include_router(dashboard_router)
 app.include_router(built_in_templates_router)
 app.include_router(custom_template_router)
+app.include_router(estimation_techniques_router)
 app.include_router(admin_built_in_templates_router)
+app.include_router(admin_estimation_techniques_router)
 
 

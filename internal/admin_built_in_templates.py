@@ -58,46 +58,6 @@ async def add_built_in_template(
     }
 
 
-
-# # Post
-# @admin_built_in_templates_router.post("")
-# async def add_built_in_template(
-#     payload: BuiltInTemplateCreate,
-#     _=Depends(internal_admin_auth)
-# ):
-#     if not payload.name:
-#         raise HTTPException(400, "Template name is required")
-
-#     exists = await built_in_templates_collection.find_one({
-#         "name": payload.name,
-#         "status": "active"
-#     })
-
-#     if exists:
-#         raise HTTPException(400, "Built-in template already exists")
-
-#     doc = {
-#         "_id": ObjectId(),
-#         "name": payload.name,
-#         "description": payload.description,
-#         "modules": payload.modules,
-#         "addons": [addon.dict() for addon in payload.addons], 
-#         "default_margin": payload.default_margin,
-#         "risk_buffer": payload.risk_buffer,
-#         "status": "active",
-#         "created_by": "estimly",
-#         "created_at": datetime.utcnow(),
-#         "updated_at": datetime.utcnow()
-#     }
-
-#     await built_in_templates_collection.insert_one(doc)
-
-#     return {
-#         "message": "Built-in template added successfully",
-#         "template_id": str(doc["_id"])
-#     }
-
-
 # Patch
 @admin_built_in_templates_router.patch("/{template_id}")
 async def patch_built_in_template(
@@ -122,7 +82,6 @@ async def patch_built_in_template(
         raise HTTPException(404, "Built-in template not found")
 
     return {"message": "Built-in template updated successfully"}
-
 
 
 
