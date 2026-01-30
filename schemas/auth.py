@@ -1,4 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional, Dict
+
 
 class SignupRequest(BaseModel):
     full_name: str
@@ -31,3 +33,9 @@ class ResetPasswordRequest(BaseModel):
         if confirm_new_password != info.data.get("new_password"):
             raise ValueError("Passwords do not match")
         return confirm_new_password
+
+class UserResponse(BaseModel):
+    email: str
+    name: Optional[str]
+    auth_type: Optional[str] = "password"
+    social_accounts: Optional[Dict[str, str]] = {}

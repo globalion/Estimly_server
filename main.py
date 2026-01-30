@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.company import router as company_router
@@ -12,6 +13,7 @@ from routes.built_in_templates import router as built_in_templates_router
 from internal.admin_built_in_templates import admin_built_in_templates_router
 from routes.estimation_techniques import router as estimation_techniques_router
 from internal.admin_estimation_techniques import admin_estimation_techniques_router
+from routes.social_auth import router as social_auth_router
 
 
 app = FastAPI(title="Estimly Backend")
@@ -29,6 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 🔑 REQUIRED for Authlib OAuth
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="SUPER_SECRET_SESSION_KEY_CHANGE_THIS"
+)
+
+
 # Routes
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -40,5 +49,8 @@ app.include_router(custom_template_router)
 app.include_router(estimation_techniques_router)
 app.include_router(admin_built_in_templates_router)
 app.include_router(admin_estimation_techniques_router)
+app.include_router(social_auth_router)
 
-
+@app.get("/")
+def health():
+    return {"status": "ok"}
