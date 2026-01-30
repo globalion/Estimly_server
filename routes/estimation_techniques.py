@@ -5,14 +5,18 @@ from database.mongo import estimation_techniques_collection
 from utils.serializers import serialize_ids_only
 from dependencies import get_current_user
 
+
 router = APIRouter(
     prefix="/api/estimation-techniques",
     tags=["Estimation Techniques"]
 )
 
-# Get all ACTIVE estimation techniques
+
 @router.get("/")
 async def get_estimation_techniques(user=Depends(get_current_user)):
+    """
+    Returns all ACTIVE estimation techniques
+    """
     cursor = estimation_techniques_collection.find(
         {"status": "active"},
         {
@@ -20,8 +24,9 @@ async def get_estimation_techniques(user=Depends(get_current_user)):
             "name": 1,
             "standard": 1,
             "description": 1,
-            "best_for": 1,
+            "use_cases": 1, 
             "complexity": 1,
+            "time_required": 1,
             "accuracy": 1
         }
     )
@@ -30,7 +35,6 @@ async def get_estimation_techniques(user=Depends(get_current_user)):
     return [serialize_ids_only(t) for t in techniques]
 
 
-# Get by ID
 @router.get("/{technique_id}")
 async def get_estimation_technique_by_id(
     technique_id: str,

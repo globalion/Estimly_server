@@ -16,7 +16,7 @@ admin_estimation_techniques_router = APIRouter(
     tags=["Internal Admin • Estimation Techniques"]
 )
 
-# Get all
+
 @admin_estimation_techniques_router.get("")
 async def get_all_estimation_techniques(
     _=Depends(internal_admin_auth)
@@ -25,7 +25,6 @@ async def get_all_estimation_techniques(
     return [serialize_ids_only(t) for t in techniques]
 
 
-# Create
 @admin_estimation_techniques_router.post("")
 async def add_estimation_technique(
     payload: EstimationTechniqueCreate,
@@ -45,8 +44,9 @@ async def add_estimation_technique(
         "name": payload.name,
         "standard": payload.standard,
         "description": payload.description,
-        "best_for": payload.best_for,
+        "use_cases": payload.use_cases,
         "complexity": payload.complexity,
+        "time_required": payload.time_required,
         "accuracy": payload.accuracy,
         "status": "active",
         "created_by": "system",
@@ -62,7 +62,6 @@ async def add_estimation_technique(
     }
 
 
-# Patch
 @admin_estimation_techniques_router.patch("/{technique_id}")
 async def patch_estimation_technique(
     technique_id: str,
@@ -87,7 +86,6 @@ async def patch_estimation_technique(
     return {"message": "Estimation technique updated successfully"}
 
 
-# Delete
 @admin_estimation_techniques_router.delete("/{technique_id}")
 async def delete_estimation_technique(
     technique_id: str,
