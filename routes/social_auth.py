@@ -94,6 +94,16 @@ async def social_login(provider: str, request: Request):
         raise HTTPException(status_code=400, detail="Unsupported provider")
 
     redirect_uri = request.url_for("social_callback", provider=provider)
+
+    if provider == "google":
+        return await client.authorize_redirect(
+            request,
+            redirect_uri,
+            prompt="consent",          
+            access_type="offline",
+            include_granted_scopes="true"
+        )
+
     return await client.authorize_redirect(request, redirect_uri)
 
 
@@ -139,6 +149,7 @@ async def social_callback(provider: str, request: Request):
     else:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
+  
     # --- UPSERT USER ---
     existing_user = await users_collection.find_one({"email": email})
 
@@ -157,7 +168,6 @@ async def social_callback(provider: str, request: Request):
             {"email": email},
             {"$set": {f"social_accounts.{provider}": provider_id}}
         )
-
     # --- Fetch user from DB ---
     db_user = await users_collection.find_one({"email": email})
 
@@ -170,5 +180,10 @@ async def social_callback(provider: str, request: Request):
 
     # --- Redirect to frontend with token ---
     return RedirectResponse(
-        url=f"{FRONTEND_URL}/auth/social/callback?token={access_token}"
-    )
+  url=f"{FRONTEND_URL}/auth/social/callback"
+      f"?token={access_token}"
+      f"&user_id={db_user['_id']}"
+      f"&email={email}"
+      f"&role={db_user.get('role','USER')}"
+)
+
