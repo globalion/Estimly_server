@@ -13,7 +13,7 @@ async def get_user_info(
     user=Depends(get_current_user)
 ):
     db_user = await users_collection.find_one(
-        {"_id": ObjectId(user["_id"])},   
+        {"_id": ObjectId(user["user_id"])},   
         {"full_name": 1, "role": 1}
     )
 
