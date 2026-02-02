@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from dependencies import get_current_user
 from database.mongo import projects_collection
@@ -8,6 +8,14 @@ router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 @router.get("/summary")
 async def dashboard_summary(user=Depends(get_current_user)):
+
+     # 🔐 Guard for social-login users
+    if not user.get("company_id"):
+        raise HTTPException(
+            status_code=400,
+            detail="Company not assigned to user"
+        )
+    
     company_id = ObjectId(user["company_id"])
 
     # Total projects of the company

@@ -21,15 +21,17 @@ async def get_current_user(
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    user = await users_collection.find_one(
-        {"_id": ObjectId(user_id)}
-    )
+    user = await users_collection.find_one({"_id": ObjectId(user_id)})
 
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    # normalize ids
     user["id"] = str(user["_id"])
     user["_id"] = str(user["_id"])
-    user["company_id"] = str(user["company_id"])
+
+    # 🔥 SAFE handling of company_id
+    company_id = user.get("company_id")
+    user["company_id"] = str(company_id) if company_id else None
 
     return user

@@ -109,6 +109,14 @@ async def social_login(provider: str, request: Request):
 
 @router.get("/{provider}/callback", name="social_callback")
 async def social_callback(provider: str, request: Request):
+
+ # ✅ HANDLE CANCEL / DENY FIRST
+    error = request.query_params.get("error")
+    if error:
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/login?error={provider}_cancelled"
+        )
+    
     client = oauth.create_client(provider)
     token = await client.authorize_access_token(request)
 
@@ -180,10 +188,11 @@ async def social_callback(provider: str, request: Request):
 
     # --- Redirect to frontend with token ---
     return RedirectResponse(
-  url=f"{FRONTEND_URL}/auth/social/callback"
-      f"?token={access_token}"
-      f"&user_id={db_user['_id']}"
-      f"&email={email}"
-      f"&role={db_user.get('role','USER')}"
+   url=f"{FRONTEND_URL}/auth/social/callback"
+    f"?token={access_token}"
+    f"&user_id={db_user['_id']}"
+    f"&email={email}"
+    f"&role={db_user.get('role','USER')}"
+    f"&message=Login successful"
 )
 
