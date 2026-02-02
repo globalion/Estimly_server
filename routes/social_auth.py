@@ -124,7 +124,7 @@ async def social_callback(provider: str, request: Request):
     if provider == "google":
         userinfo = token["userinfo"]
         email = userinfo.get("email")
-        name = userinfo.get("name")
+        full_name  = userinfo.get("name")
         avatar = userinfo.get("picture")
         provider_id = userinfo.get("sub")
 
@@ -150,7 +150,7 @@ async def social_callback(provider: str, request: Request):
     elif provider == "linkedin":
         userinfo = token["userinfo"]
         email = userinfo.get("email")
-        name = userinfo.get("name")
+        full_name  = userinfo.get("name")
         avatar = None
         provider_id = userinfo.get("sub")
 
@@ -164,7 +164,7 @@ async def social_callback(provider: str, request: Request):
     if not existing_user:
         await users_collection.insert_one({
             "email": email,
-            "name": name,
+            "full_name ": full_name ,
             "avatar": avatar,
             "auth_type": "social",
             "social_accounts": {provider: provider_id},
