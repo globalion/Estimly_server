@@ -51,3 +51,10 @@ class ProjectUpdate(BaseModel):
     status: Optional[str] = None
     modules: Optional[List[ProjectModuleSchema]] = None
 
+
+class EstimationProjectRequest(BaseModel):
+    target_margin: int
+    risk_buffer: int
+    negotiation_buffer: int
+    estimated_team_size: int
+    modules: List[ProjectModuleSchema]
