@@ -35,7 +35,7 @@ app.add_middleware(
 # 🔑 REQUIRED for Authlib OAuth
 app.add_middleware(
     SessionMiddleware,
-    secret_key="SUPER_SECRET_SESSION_KEY_CHANGE_THIS"
+    secret_key="YI_Ucjder1jd6H9M49K8nJ_siz9stRJ2OK-Lan8LDvo"
 )
 
 
