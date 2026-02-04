@@ -105,6 +105,7 @@ def calculate_estimation(project, resource_rates=RESOURCE_RATES):
             "target_margin_percent": project["target_margin"],
             "margin_amount": round(margin_amount),
 
+            "price_before_negotiation": round(price_before_negotiation),
             "negotiation_buffer_percent": project["negotiation_buffer"],
             "negotiation_buffer_amount": round(negotiation_amount),
 
