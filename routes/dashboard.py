@@ -31,6 +31,11 @@ async def dashboard_summary(user=Depends(get_current_user)):
     status_data = await projects_collection.aggregate(pipeline).to_list(None)
     status_distribution = {item["_id"]: item["count"] for item in status_data}
 
+    active_projects = (
+    status_distribution.get("in_progress", 0) +
+    status_distribution.get("approved", 0)
+     )
+
     # Recent projects (NO recalculation)
     recent_projects = await projects_collection.find(
         {"company_id": company_id},
@@ -56,11 +61,12 @@ async def dashboard_summary(user=Depends(get_current_user)):
             "clientName": project.get("client_name"),
             "status": project.get("status"),
             "updated_at": project.get("updated_at"),
-            "estimation": snapshot
+            "estimation_snapshot": snapshot
         })
 
     return {
         "total_projects": total_projects,
+        "active_projects": active_projects,
         "status_distribution": status_distribution,
         "recent": recent
     }
