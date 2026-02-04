@@ -4,8 +4,7 @@ from core.estimation_constants import (
     DEFAULT_SETTINGS
 )
 
-
-def calculate_task_cost(task, resource_rates=RESOURCE_RATES):
+def calculate_task_cost(task, resource_rates):
     hours = task["hours"]
     role = task["role"]
     level = task["level"]
@@ -19,21 +18,21 @@ def calculate_task_cost(task, resource_rates=RESOURCE_RATES):
     return adjusted_hours, cost, role
 
 
-def calculate_estimation(project):
+def calculate_estimation(project, resource_rates=RESOURCE_RATES):
     total_hours = 0
     total_cost = 0
 
-    module_results = []
+    modules = []
     resource_hours = {}
 
-    # BASE COST
+    # Base Cost
     for module in project["modules"]:
         module_hours = 0
         module_cost = 0
 
         for feature in module["features"]:
             for task in feature["tasks"]:
-                adj_hours, cost, role = calculate_task_cost(task)
+                adj_hours, cost, role = calculate_task_cost(task, resource_rates)
 
                 module_hours += adj_hours
                 module_cost += cost
@@ -43,13 +42,13 @@ def calculate_estimation(project):
 
                 resource_hours[role] = resource_hours.get(role, 0) + adj_hours
 
-        module_results.append({
+        modules.append({
             "name": module["name"],
             "hours": round(module_hours, 1),
             "cost": round(module_cost)
         })
 
-    # COST SUMMARY 
+    # Pricing
     risk_amount = total_cost * project["risk_buffer"] / 100
     cost_with_risk = total_cost + risk_amount
 
@@ -62,27 +61,7 @@ def calculate_estimation(project):
     profit = final_price - total_cost
     profit_percent = (profit / total_cost * 100) if total_cost else 0
 
-    cost_summary = {
-        "base_cost": round(total_cost),
-        "total_hours": round(total_hours, 1),
-
-        "risk_buffer_percent": project["risk_buffer"],
-        "risk_buffer_amount": round(risk_amount),
-        "cost_with_risk": round(cost_with_risk),
-
-        "target_margin_percent": project["target_margin"],
-        "margin_amount": round(margin_amount),
-        "price_before_negotiation": round(price_before_negotiation),
-
-        "negotiation_buffer_percent": project["negotiation_buffer"],
-        "negotiation_buffer_amount": round(negotiation_amount),
-
-        "final_price": round(final_price),
-        "profit": round(profit),
-        "profit_margin_percent": round(profit_percent, 1)
-    }
-
-    # TIMELINE
+    # Timeline
     hours_per_week = (
         DEFAULT_SETTINGS["working_hours_per_day"]
         * DEFAULT_SETTINGS["working_days_per_week"]
@@ -97,36 +76,55 @@ def calculate_estimation(project):
         weeks_required / DEFAULT_SETTINGS["sprint_duration_weeks"]
     ).__ceil__()
 
-    timeline = {
-        "weeks_required": weeks_required,
-        "months_estimate": (weeks_required / 4).__ceil__(),
-        "sprints_required": sprints_required,
-        "estimated_team_size": project["estimated_team_size"],
-        "total_effort_hours": round(total_hours, 1),
-        "assumptions": {
-            "working_hours_per_day": DEFAULT_SETTINGS["working_hours_per_day"],
-            "working_days_per_week": DEFAULT_SETTINGS["working_days_per_week"],
-            "sprint_duration_weeks": DEFAULT_SETTINGS["sprint_duration_weeks"],
-            "resource_efficiency_percent": 80
-        }
-    }
-
-    # RESOURCE ALLOCATION 
-    resource_allocation = []
-    for role, hrs in resource_hours.items():
-        resource_allocation.append({
+    # Resource allocation
+    resource_allocation = [
+        {
             "role": role,
             "hours": round(hrs, 1),
             "percentage": round((hrs / total_hours) * 100, 1)
-        })
+        }
+        for role, hrs in resource_hours.items()
+    ]
+
 
     return {
-        "wbs": {
-            "total_hours": round(total_hours, 1),
-            "total_cost": round(total_cost),
-            "modules": module_results
+        "totals": {
+            "hours": round(total_hours, 1),
+            "base_cost": round(total_cost)
         },
-        "cost_summary": cost_summary,
-        "timeline": timeline,
+
+        "wbs": {
+            "modules": modules
+        },
+
+        "pricing": {
+            "risk_buffer_percent": project["risk_buffer"],
+            "risk_buffer_amount": round(risk_amount),
+            "cost_with_risk": round(cost_with_risk),
+
+            "target_margin_percent": project["target_margin"],
+            "margin_amount": round(margin_amount),
+
+            "negotiation_buffer_percent": project["negotiation_buffer"],
+            "negotiation_buffer_amount": round(negotiation_amount),
+
+            "final_price": round(final_price),
+            "profit": round(profit),
+            "profit_margin_percent": round(profit_percent, 1)
+        },
+
+        "timeline": {
+            "weeks_required": weeks_required,
+            "months_estimate": (weeks_required / 4).__ceil__(),
+            "sprints_required": sprints_required,
+            "estimated_team_size": project["estimated_team_size"],
+            "assumptions": {
+                "working_hours_per_day": DEFAULT_SETTINGS["working_hours_per_day"],
+                "working_days_per_week": DEFAULT_SETTINGS["working_days_per_week"],
+                "sprint_duration_weeks": DEFAULT_SETTINGS["sprint_duration_weeks"],
+                "resource_efficiency_percent": 80
+            }
+        },
+
         "resource_allocation": resource_allocation
     }

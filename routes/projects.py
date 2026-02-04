@@ -7,10 +7,12 @@ from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
+from services.cost_timeline_engine import calculate_estimation
+
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
-# Create Project
+# Create
 @router.post("/")
 async def create_project(
     payload: ProjectCreate,
@@ -19,7 +21,6 @@ async def create_project(
     name_norm = normalize(payload.name)
     client_norm = normalize(payload.client_name)
 
-    # Duplicate check (company scoped)
     existing = await projects_collection.find_one({
         "company_id": ObjectId(user["company_id"]),
         "name_normalized": name_norm,
@@ -31,22 +32,27 @@ async def create_project(
             status_code=409,
             detail="Project with same name already exists for this client"
         )
-    
+
     now = datetime.utcnow()
 
+    project_data = payload.model_dump(mode="json")
+
+    # calculate estimation while creating project
+    estimation_result = calculate_estimation(project_data)
+
     project = {
-        #  **payload.dict(),
-         **payload.model_dump(mode="json"),
-   
+        **project_data,
 
-        # "template_id": ObjectId(payload.template_id) if payload.template_id else None,
-        "template_name": payload.template_name,
-        # "template_type": payload.template_type,
-
-       "modules": [
-        module.model_dump(mode="json") for module in payload.modules
+        "modules": [
+            module.model_dump(mode="json") for module in payload.modules
         ],
 
+        "estimation_snapshot": {
+            **estimation_result,
+            "calculated_at": now
+        },
+
+        "template_name": payload.template_name,
         "name_normalized": name_norm,
         "client_name_normalized": client_norm,
         "status": "draft",
@@ -62,6 +68,7 @@ async def create_project(
         "message": "Project added successfully",
         "project_id": str(result.inserted_id)
     }
+
 
 # Get All Projects
 @router.get("/")
