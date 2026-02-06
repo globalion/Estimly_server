@@ -4,7 +4,7 @@ from typing import List, Optional
 
 class BuiltInTaskSchema(BaseModel):
     name: str
-    hours: int = Field(gt=0)
+    hours: float = Field(gt=0)
     role: str
     level: str
 
@@ -21,8 +21,8 @@ class BuiltInModuleSchema(BaseModel):
 
 class BuiltInAddOnSchema(BaseModel):
     name: str
-    hours: int = Field(ge=0)
-    cost: int = Field(ge=0)
+    hours: float = Field(ge=0)
+    cost: float = Field(ge=0)
 
 
 class BuiltInTemplateCreate(BaseModel):

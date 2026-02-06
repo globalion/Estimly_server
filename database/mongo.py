@@ -9,10 +9,12 @@ if not MONGO_URL:
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.get_database()
 
-users_collection = db.users
-companies_collection = db.companies
-projects_collection = db.projects
-built_in_templates_collection = db.built_in_templates
-custom_templates_collection = db.custom_templates
-estimation_techniques_collection = db.estimation_techniques
+users_collection = db["users"]
+companies_collection = db["companies"]
+projects_collection = db["projects"]
+built_in_templates_collection = db["built_in_templates"]
+custom_templates_collection = db["custom_templates"]
+estimation_techniques_collection = db["estimation_techniques"]
+resource_roles_collection = db["resource_roles"]
+resource_rate_history_collection = db["resource_rate_history"]
 

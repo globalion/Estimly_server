@@ -3,7 +3,7 @@ from typing import List, Optional
 
 class ProjectTaskSchema(BaseModel):
     name: str
-    hours: int = Field(gt=0)
+    hours: float = Field(gt=0)
     role: str
     level: str
 
