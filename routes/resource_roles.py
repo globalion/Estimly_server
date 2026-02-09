@@ -309,7 +309,10 @@ async def get_all_rate_history(user=Depends(get_current_user)):
             # optional fields (safe access)
             "old_rate": h.get("old_rate"),
             "new_rate": h.get("new_rate"),
-            "change_percent": h.get("change_percent")
+            "change_percent": h.get("change_percent"),
+
+            "old_name": h.get("old_name"),
+            "new_name": h.get("new_name"),
         }
         for h in history
     ]
