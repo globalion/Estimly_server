@@ -130,7 +130,10 @@ async def update_resource_role(
         rate_changed = True
 
     if not updates:
-        raise HTTPException(400, "No valid fields to update")
+         return {
+        "message": "No changes detected"
+         }
+        # raise HTTPException(400, "No valid fields to update")
 
     updates["updated_at"] = now
 
