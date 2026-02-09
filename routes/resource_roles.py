@@ -293,6 +293,27 @@ async def get_roles():
     ]
 
 
+# all role history
+@router.get("/history")
+async def get_all_rate_history(user=Depends(get_current_user)):
+    history = await resource_rate_history_collection.find(
+        {}
+    ).sort("changed_at", -1).to_list(None)
+
+    return [
+        {
+            "changed_at": h["changed_at"],
+            "role_name": h["role_name"],
+            "action": h["action"],
+
+            # optional fields (safe access)
+            "old_rate": h.get("old_rate"),
+            "new_rate": h.get("new_rate"),
+            "change_percent": h.get("change_percent")
+        }
+        for h in history
+    ]
+
 #get single role data
 @router.get("/{role_id}")
 async def get_role_id(
@@ -325,29 +346,6 @@ async def get_role_id(
         "created_at": role.get("created_at"),
         "updated_at": role.get("updated_at")
     }
-
-
-# all role history
-@router.get("/history")
-async def get_all_rate_history(user=Depends(get_current_user)):
-    history = await resource_rate_history_collection.find(
-        {}
-    ).sort("changed_at", -1).to_list(None)
-
-    return [
-        {
-            "changed_at": h["changed_at"],
-            "role_name": h["role_name"],
-            "action": h["action"],
-
-            # optional fields (safe access)
-            "old_rate": h.get("old_rate"),
-            "new_rate": h.get("new_rate"),
-            "change_percent": h.get("change_percent")
-        }
-        for h in history
-    ]
-
 
 
 #get single role history
