@@ -293,6 +293,40 @@ async def get_roles():
     ]
 
 
+#get single role data
+@router.get("/{role_id}")
+async def get_role_id(
+    role_id: str,
+    user=Depends(get_current_user)
+):
+    try:
+        role_object_id = ObjectId(role_id)
+    except Exception:
+        raise HTTPException(400, "Invalid role id")
+
+    role = await resource_roles_collection.find_one({
+        "_id": role_object_id
+    })
+
+    if not role:
+        raise HTTPException(404, "Role not found")
+
+    history_count = await resource_rate_history_collection.count_documents({
+        "role_id": role_object_id
+    })
+
+    return {
+        "id": str(role["_id"]),
+        "name": role["name"],
+        "label": role["label"],
+        "hourly_rate": role["hourly_rate"],
+        "type": role["type"],
+        "history_count": history_count,
+        "created_at": role.get("created_at"),
+        "updated_at": role.get("updated_at")
+    }
+
+
 # all role history
 @router.get("/history")
 async def get_all_rate_history(user=Depends(get_current_user)):
@@ -316,7 +350,7 @@ async def get_all_rate_history(user=Depends(get_current_user)):
 
 
 
-#single role history
+#get single role history
 @router.get("/{role_id}/history")
 async def get_role_history(
     role_id: str,
