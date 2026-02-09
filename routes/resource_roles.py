@@ -240,11 +240,12 @@ async def reset_default_roles(
 
         await resource_rate_history_collection.insert_one({
             "role_id": role["_id"],
+            "role_name": role["label"],
             "action": "reset",
             "old_rate": old_rate,
             "new_rate": new_rate,
-            "old_label": role["label"],
-            "new_label": role["label"],
+            # "old_label": role["label"],
+            # "new_label": role["label"],
             "change_percent": round(
                 ((new_rate - old_rate) / old_rate) * 100, 2
             ) if old_rate else None,
@@ -260,7 +261,7 @@ async def reset_default_roles(
         updated.append(role["label"])
 
     return {
-        "message": "Default roles reset",
+        "message": "Default roles reset successfully",
         "updated_count": len(updated),
         "roles": updated
     }
@@ -302,9 +303,10 @@ async def get_all_rate_history(user=Depends(get_current_user)):
 
     return [
         {
-            "changed_at": h["changed_at"],
-            "role_name": h["role_name"],
-            "action": h["action"],
+            "changed_at": h.get("changed_at"),
+            # "role_name": h.get("role_name"),
+            "role_name": h.get("role_name") or h.get("old_label") or h.get("new_label"),
+            "action": h.get("action"),
 
             # optional fields (safe access)
             "old_rate": h.get("old_rate"),
