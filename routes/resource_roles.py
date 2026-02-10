@@ -278,7 +278,12 @@ async def get_roles(user=Depends(get_current_user)):
     role_ids = [r["_id"] for r in roles]
 
     history_counts = await resource_rate_history_collection.aggregate([
-        {"$match": {"role_id": {"$in": role_ids}}},
+        {
+            "$match": {
+                "role_id": {"$in": role_ids},
+                "company_id": ObjectId(user["company_id"])
+            }
+        },
         {"$group": {"_id": "$role_id", "count": {"$sum": 1}}}
     ]).to_list(None)
 
