@@ -14,7 +14,7 @@ from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # Signup Endpoint
-@router.post("/signup", response_model=UserResponse)
+@router.post("/signup")
 async def signup(payload: SignupRequest):
     # 1. Check email uniqueness
     existing_user = await users_collection.find_one({"email": payload.email})
@@ -59,13 +59,7 @@ async def signup(payload: SignupRequest):
     }
     user_result = await users_collection.insert_one(user_doc)
 
-    return UserResponse(
-        id=str(user_result.inserted_id),
-        full_name=user_doc["full_name"],
-        email=user_doc["email"],
-        role=user_doc["role"],
-        company_id=str(company_id)
-    )
+    return {"message": "User Registered successfully"}  
 
 
 # Login Endpoint

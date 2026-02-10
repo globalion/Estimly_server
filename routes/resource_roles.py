@@ -28,8 +28,13 @@ async def create_custom_role(
 
     existing = await resource_roles_collection.find_one({
         "name": role_name,
-        "is_active": True
+        "is_active": True,
+        "$or": [
+            {"type": "default"},
+            {"company_id": ObjectId(user["company_id"])}
+        ]
     })
+
     if existing:
         raise HTTPException(409, "Role with this name already exists")
 
@@ -41,6 +46,7 @@ async def create_custom_role(
         "hourly_rate": payload.hourly_rate,
         "default_hourly_rate": payload.hourly_rate,
         "type": "custom",
+        "company_id": ObjectId(user["company_id"]),
         "is_active": True,
         "created_at": now,
         "updated_at": now
@@ -56,6 +62,7 @@ async def create_custom_role(
         "old_rate": 0,
         "new_rate": payload.hourly_rate,
         "change_percent": None,
+        "company_id": ObjectId(user["company_id"]),
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     })
@@ -70,7 +77,14 @@ async def update_resource_role(
     payload: ResourceRoleUpdate,
     user=Depends(get_current_user)
 ):
-    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
+    role = await resource_roles_collection.find_one({
+        "_id": ObjectId(role_id),
+        "$or": [
+            {"type": "default"},
+            {"company_id": ObjectId(user["company_id"])}
+        ]
+    })
+
     if not role:
         raise HTTPException(404, "Role not found")
 
@@ -103,8 +117,13 @@ async def update_resource_role(
             exists = await resource_roles_collection.find_one({
                 "name": new_name,
                 "is_active": True,
-                "_id": {"$ne": ObjectId(role_id)}
+                "_id": {"$ne": ObjectId(role_id)},
+                "$or": [
+                    {"type": "default"},
+                    {"company_id": ObjectId(user["company_id"])}
+                ]
             })
+
             if exists:
                 raise HTTPException(409, "Role with this name already exists")
 
@@ -122,12 +141,7 @@ async def update_resource_role(
 
     updates["updated_at"] = now
 
-    if name_changed:
-        action = "renamed"
-    elif rate_changed:
-        action = "updated"
-    else:
-        action = "updated"
+    action = "renamed" if name_changed else "updated"
         
     history_entry = {
         "role_id": role["_id"],
@@ -139,6 +153,7 @@ async def update_resource_role(
         "old_rate": old_rate,
         "new_rate": new_rate,
         "change_percent": None,
+        "company_id": ObjectId(user["company_id"]),
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     }
@@ -167,7 +182,11 @@ async def update_resource_role(
 # Delete Custom role
 @router.delete("/{role_id}")
 async def delete_role(role_id: str, user=Depends(get_current_user)):
-    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
+    role = await resource_roles_collection.find_one({
+        "_id": ObjectId(role_id),
+        "company_id": ObjectId(user["company_id"])
+    })
+
     if not role:
         raise HTTPException(404, "Role not found")
 
@@ -184,6 +203,7 @@ async def delete_role(role_id: str, user=Depends(get_current_user)):
         "old_rate": role["hourly_rate"],
         "new_rate": None,
         "change_percent": None,
+        "company_id": ObjectId(user["company_id"]),
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     })
@@ -223,6 +243,7 @@ async def reset_default_roles(user=Depends(get_current_user)):
                 round(((new_rate - old_rate) / old_rate) * 100, 2)
                 if old_rate else 0
             ),
+            "company_id": ObjectId(user["company_id"]),
             "changed_by": ObjectId(user["_id"]),
             "changed_at": now
         })
@@ -243,8 +264,16 @@ async def reset_default_roles(user=Depends(get_current_user)):
 
 # Get All roles
 @router.get("/")
-async def get_roles():
-    roles = await resource_roles_collection.find({}).to_list(None)
+async def get_roles(user=Depends(get_current_user)):
+
+    roles = await resource_roles_collection.find({
+    "$or": [
+        {"type": "default"},
+        {"company_id": ObjectId(user["company_id"])}
+    ],
+    "is_active": True
+}).to_list(None)
+
 
     role_ids = [r["_id"] for r in roles]
 
@@ -270,9 +299,11 @@ async def get_roles():
 # Get all role history
 @router.get("/history")
 async def get_all_rate_history(user=Depends(get_current_user)):
-    history = await resource_rate_history_collection.find(
-        {}
-    ).sort("changed_at", -1).to_list(None)
+
+    history = await resource_rate_history_collection.find({
+    "company_id": ObjectId(user["company_id"])
+}).sort("changed_at", -1).to_list(None)
+
 
     return [
         {
@@ -292,12 +323,20 @@ async def get_all_rate_history(user=Depends(get_current_user)):
 # Get single role
 @router.get("/{role_id}")
 async def get_role_id(role_id: str, user=Depends(get_current_user)):
-    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
+    role = await resource_roles_collection.find_one({
+        "_id": ObjectId(role_id),
+        "$or": [
+            {"type": "default"},
+            {"company_id": ObjectId(user["company_id"])} 
+        ]
+    })
+
     if not role:
         raise HTTPException(404, "Role not found")
 
     history_count = await resource_rate_history_collection.count_documents({
-        "role_id": role["_id"]
+        "role_id": role["_id"],
+        "company_id": ObjectId(user["company_id"])
     })
 
     return {
@@ -316,8 +355,10 @@ async def get_role_id(role_id: str, user=Depends(get_current_user)):
 @router.get("/{role_id}/history")
 async def get_role_history(role_id: str, user=Depends(get_current_user)):
     history = await resource_rate_history_collection.find(
-        {"role_id": ObjectId(role_id)}
-    ).sort("changed_at", -1).to_list(None)
+        {
+  "role_id": ObjectId(role_id),
+  "company_id": ObjectId(user["company_id"])
+}).sort("changed_at", -1).to_list(None)
 
     return [
         {
@@ -332,3 +373,5 @@ async def get_role_history(role_id: str, user=Depends(get_current_user)):
         }
         for h in history
     ]
+
+
