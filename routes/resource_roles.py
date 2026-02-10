@@ -7,48 +7,37 @@ from database.mongo import (
     resource_rate_history_collection
 )
 from dependencies import get_current_user
-from utils.serializers import serialize_ids_only
 from utils.normalize import normalize_role_name
 from schemas.resource_role import (
     ResourceRoleCreate,
     ResourceRoleUpdate
 )
 
-from pymongo import ReturnDocument
-
 router = APIRouter(
     prefix="/api/resource-roles",
     tags=["Resource Roles"]
 )
- 
- 
-#create custom role
+
+# Create Custom role
 @router.post("/")
 async def create_custom_role(
     payload: ResourceRoleCreate,
     user=Depends(get_current_user)
 ):
-    # Generate canonical name
     role_name = normalize_role_name(payload.label)
 
-    # Duplicate check
     existing = await resource_roles_collection.find_one({
         "name": role_name,
         "is_active": True
     })
-
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="Role with this name already exists"
-        )
+        raise HTTPException(409, "Role with this name already exists")
 
     now = datetime.utcnow()
 
-    # Create role
     role_doc = {
-        "name": role_name,                 
-        "label": payload.label.strip(),    
+        "name": role_name,
+        "label": payload.label.strip(),
         "hourly_rate": payload.hourly_rate,
         "default_hourly_rate": payload.hourly_rate,
         "type": "custom",
@@ -59,10 +48,10 @@ async def create_custom_role(
 
     result = await resource_roles_collection.insert_one(role_doc)
 
-    # Insert rate history
     await resource_rate_history_collection.insert_one({
         "role_id": result.inserted_id,
         "role_name": role_name,
+        "role_label": payload.label.strip(),
         "action": "added",
         "old_rate": 0,
         "new_rate": payload.hourly_rate,
@@ -71,23 +60,17 @@ async def create_custom_role(
         "changed_at": now
     })
 
-    return {
-        "message": "Custom role created successfully",
-        "role_name": role_name
-    }
+    return {"message": "Custom role created successfully"}
 
 
-#update role data
+# Update Role
 @router.patch("/{role_id}")
 async def update_resource_role(
     role_id: str,
     payload: ResourceRoleUpdate,
     user=Depends(get_current_user)
 ):
-    role = await resource_roles_collection.find_one({
-        "_id": ObjectId(role_id)
-    })
-
+    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
     if not role:
         raise HTTPException(404, "Role not found")
 
@@ -102,27 +85,32 @@ async def update_resource_role(
     new_rate = old_rate
 
     updates = {}
-
     name_changed = False
     rate_changed = False
+
+    if role["type"] == "default":
+        if payload.label:
+            raise HTTPException(
+                status_code=400,
+                detail="Default role name cannot be changed"
+            )
 
     if payload.label:
         new_label = payload.label.strip()
         new_name = normalize_role_name(new_label)
 
         if new_name != old_name:
-            existing = await resource_roles_collection.find_one({
+            exists = await resource_roles_collection.find_one({
                 "name": new_name,
                 "is_active": True,
                 "_id": {"$ne": ObjectId(role_id)}
             })
-            if existing:
+            if exists:
                 raise HTTPException(409, "Role with this name already exists")
 
             updates["name"] = new_name
             updates["label"] = new_label
             name_changed = True
-
 
     if payload.hourly_rate is not None and payload.hourly_rate != old_rate:
         new_rate = payload.hourly_rate
@@ -130,10 +118,7 @@ async def update_resource_role(
         rate_changed = True
 
     if not updates:
-         return {
-        "message": "No changes detected"
-         }
-        # raise HTTPException(400, "No valid fields to update")
+        return {"message": "No changes detected"}
 
     updates["updated_at"] = now
 
@@ -143,11 +128,17 @@ async def update_resource_role(
         action = "updated"
     else:
         action = "updated"
-
+        
     history_entry = {
         "role_id": role["_id"],
-        "role_name": old_name, 
+        "role_name": old_name,     
+        "role_label": (
+        new_label if name_changed else old_label
+    ),        
         "action": action,
+        "old_rate": old_rate,
+        "new_rate": new_rate,
+        "change_percent": None,
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     }
@@ -156,12 +147,12 @@ async def update_resource_role(
         history_entry["old_rate"] = old_rate
         history_entry["new_rate"] = new_rate
         history_entry["change_percent"] = round(
-            ((new_rate - old_rate) / old_rate) * 100, 2
-        ) if old_rate else None
+        ((new_rate - old_rate) / old_rate) * 100, 2
+    ) if old_rate else 0
 
     if name_changed:
-        history_entry["old_name"] = old_name
-        history_entry["new_name"] = new_name
+        history_entry["old_label"] = old_label
+        history_entry["new_label"] = new_label
 
     await resource_rate_history_collection.insert_one(history_entry)
 
@@ -170,71 +161,51 @@ async def update_resource_role(
         {"$set": updates}
     )
 
-    return {
-        "message": "Role updated successfully",
-        "action": action
-    }
+    return {"message": "Role updated successfully", "action": action}
 
 
-#delete custom role  
+# Delete Custom role
 @router.delete("/{role_id}")
-async def delete_role(
-    role_id: str,
-    user=Depends(get_current_user)
-):
-    role = await resource_roles_collection.find_one({
-        "_id": ObjectId(role_id)
-    })
+async def delete_role(role_id: str, user=Depends(get_current_user)):
+    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
     if not role:
         raise HTTPException(404, "Role not found")
-    
 
     if role["type"] == "default":
-        raise HTTPException(
-            status_code=400,
-            detail="Default roles cannot be deleted"
-        )
+        raise HTTPException(400, "Default roles cannot be deleted")
 
     now = datetime.utcnow()
 
     await resource_rate_history_collection.insert_one({
         "role_id": role["_id"],
         "role_name": role["name"],
+        "role_label": role["label"],
         "action": "deleted",
         "old_rate": role["hourly_rate"],
         "new_rate": None,
-        "old_label": role["label"],
-        "new_label": role["label"],
         "change_percent": None,
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     })
 
-    await resource_roles_collection.delete_one({
-        "_id": role["_id"]
-    })
+    await resource_roles_collection.delete_one({"_id": role["_id"]})
 
-    return {"message": "Custom Role deleted permanently"}
+    return {"message": "Custom role deleted permanently"}
 
 
-#reset to default rate
+# Reset Default role
 @router.post("/reset-defaults")
-async def reset_default_roles(
-    user=Depends(get_current_user)
-):
+async def reset_default_roles(user=Depends(get_current_user)):
     now = datetime.utcnow()
 
-    default_roles = await resource_roles_collection.find({
-        "type": "default"
-    }).to_list(None)
+    default_roles = await resource_roles_collection.find(
+        {"type": "default"}
+    ).to_list(None)
 
     updated = []
 
     for role in default_roles:
         default_rate = role.get("default_hourly_rate")
-        if default_rate is None:
-            continue
-
         if role["hourly_rate"] == default_rate:
             continue
 
@@ -243,15 +214,15 @@ async def reset_default_roles(
 
         await resource_rate_history_collection.insert_one({
             "role_id": role["_id"],
-            "role_name": role["label"],
+            "role_name": role["name"],
+            "role_label": role["label"],
             "action": "reset",
             "old_rate": old_rate,
             "new_rate": new_rate,
-            # "old_label": role["label"],
-            # "new_label": role["label"],
-            "change_percent": round(
-                ((new_rate - old_rate) / old_rate) * 100, 2
-            ) if old_rate else None,
+            "change_percent": (
+                round(((new_rate - old_rate) / old_rate) * 100, 2)
+                if old_rate else 0
+            ),
             "changed_by": ObjectId(user["_id"]),
             "changed_at": now
         })
@@ -270,7 +241,7 @@ async def reset_default_roles(
     }
 
 
-# get all role data
+# Get All roles
 @router.get("/")
 async def get_roles():
     roles = await resource_roles_collection.find({}).to_list(None)
@@ -296,8 +267,7 @@ async def get_roles():
         for r in roles
     ]
 
-
-# all role history
+# Get all role history
 @router.get("/history")
 async def get_all_rate_history(user=Depends(get_current_user)):
     history = await resource_rate_history_collection.find(
@@ -306,42 +276,28 @@ async def get_all_rate_history(user=Depends(get_current_user)):
 
     return [
         {
-            "changed_at": h.get("changed_at"),
-            # "role_name": h.get("role_name"),
-            "role_name": h.get("role_name") or h.get("old_label") or h.get("new_label"),
-            "action": h.get("action"),
-
-            # optional fields (safe access)
+            "changed_at": h["changed_at"],
+            "role_label": h["role_label"],
+            "action": h["action"],
             "old_rate": h.get("old_rate"),
             "new_rate": h.get("new_rate"),
             "change_percent": h.get("change_percent"),
-
-            "old_name": h.get("old_name"),
-            "new_name": h.get("new_name"),
+            "old_label": h.get("old_label"),
+            "new_label": h.get("new_label")
         }
         for h in history
     ]
 
-#get single role data
+
+# Get single role
 @router.get("/{role_id}")
-async def get_role_id(
-    role_id: str,
-    user=Depends(get_current_user)
-):
-    try:
-        role_object_id = ObjectId(role_id)
-    except Exception:
-        raise HTTPException(400, "Invalid role id")
-
-    role = await resource_roles_collection.find_one({
-        "_id": role_object_id
-    })
-
+async def get_role_id(role_id: str, user=Depends(get_current_user)):
+    role = await resource_roles_collection.find_one({"_id": ObjectId(role_id)})
     if not role:
         raise HTTPException(404, "Role not found")
 
     history_count = await resource_rate_history_collection.count_documents({
-        "role_id": role_object_id
+        "role_id": role["_id"]
     })
 
     return {
@@ -356,30 +312,23 @@ async def get_role_id(
     }
 
 
-#get single role history
+# Get single role history
 @router.get("/{role_id}/history")
-async def get_role_history(
-    role_id: str,
-    user=Depends(get_current_user)
-):
-    try:
-        role_object_id = ObjectId(role_id)
-    except Exception:
-        raise HTTPException(400, "Invalid role id")
-
+async def get_role_history(role_id: str, user=Depends(get_current_user)):
     history = await resource_rate_history_collection.find(
-        {"role_id": role_object_id}
+        {"role_id": ObjectId(role_id)}
     ).sort("changed_at", -1).to_list(None)
 
     return [
         {
             "changed_at": h["changed_at"],
+            "role_label": h["role_label"],
             "action": h["action"],
             "old_rate": h.get("old_rate"),
             "new_rate": h.get("new_rate"),
             "change_percent": h.get("change_percent"),
-            "old_name": h.get("old_name"),
-            "new_name": h.get("new_name")
+            "old_label": h.get("old_label"),
+            "new_label": h.get("new_label")
         }
         for h in history
     ]
