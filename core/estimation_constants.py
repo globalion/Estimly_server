@@ -1,16 +1,3 @@
-RESOURCE_RATES = {
-    "junior_dev": 15,
-    "senior_dev": 30,
-    "tech_lead": 45,
-    "ai_engineer": 50,
-    "qa_junior": 12,
-    "qa_senior": 22,
-    "ui_ux": 25,
-    "pm": 35,
-    "devops": 32,
-    "business_analyst": 28
-}
-
 COMPLEXITY_MULTIPLIERS = {
     "low": 1.0,
     "medium": 1.3,
