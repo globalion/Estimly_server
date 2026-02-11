@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 from services.cost_timeline_engine import calculate_estimation
 from schemas.project import EstimationProjectRequest
 from dependencies import get_current_user
+from services.resource_rates import get_resource_rate_map
+from services.cost_timeline_engine import calculate_estimation
 
 router = APIRouter(
     prefix="/api/estimation",
@@ -14,6 +16,7 @@ async def calculate_project_estimation(
     user=Depends(get_current_user)
 ):
     project = payload.model_dump()
-    result = calculate_estimation(project)
+    rates = await get_resource_rate_map(user["company_id"])
+    result = calculate_estimation(project, rates)
 
     return result

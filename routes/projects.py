@@ -7,12 +7,12 @@ from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
+from services.resource_rates import get_resource_rate_map
 from services.cost_timeline_engine import calculate_estimation
-
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
-# Create
+# Create Project
 @router.post("/")
 async def create_project(
     payload: ProjectCreate,
@@ -37,8 +37,10 @@ async def create_project(
 
     project_data = payload.model_dump(mode="json")
 
+    rates = await get_resource_rate_map(user["company_id"])
+    
     # calculate estimation while creating project
-    estimation_result = calculate_estimation(project_data)
+    estimation_result = calculate_estimation(project_data, rates)
 
     project = {
         **project_data,
@@ -123,18 +125,105 @@ async def update_project(
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided")
 
+    # Fetch existing project
+    project = await projects_collection.find_one({
+        "_id": ObjectId(project_id),
+        "company_id": ObjectId(user["company_id"])
+    })
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Normalize basic fields
     if "name" in update_data:
         update_data["name_normalized"] = normalize(update_data["name"])
+
+    if "client_name" in update_data:
+        update_data["client_name_normalized"] = normalize(update_data["client_name"])
 
     if "status" in update_data:
         update_data["status"] = update_data["status"].strip().lower()
 
-    if "client_name" in update_data:
-        update_data["client_name_normalized"] = normalize(update_data["client_name"])
-      
-    update_data["updated_at"] = datetime.utcnow()
+
+    # Detect estimation-impacting changes
+    estimation_fields = {
+        "modules",
+        "target_margin",
+        "risk_buffer",
+        "negotiation_buffer",
+        "estimated_team_size"
+    }
+
+    should_recalculate = any(
+        field in update_data for field in estimation_fields
+    )
+
+    if should_recalculate:
+
+        # Build clean calculation input
+        calculation_input = {
+            "modules": update_data.get("modules", project["modules"]),
+            "target_margin": update_data.get("target_margin", project["target_margin"]),
+            "risk_buffer": update_data.get("risk_buffer", project["risk_buffer"]),
+            "negotiation_buffer": update_data.get("negotiation_buffer", project["negotiation_buffer"]),
+            "estimated_team_size": update_data.get("estimated_team_size", project["estimated_team_size"]),
+        }
+
+        # Extract used roles
+        used_roles = set()
+
+        for module in calculation_input["modules"]:
+            for feature in module["features"]:
+                for task in feature["tasks"]:
+                    used_roles.add(task["role"])
+
+
+        # Preserve old snapshot rates
+        old_snapshot = project.get("estimation_snapshot", {})
+        old_rates = old_snapshot.get("rate_snapshot", {})
     
-    project = await projects_collection.find_one_and_update(
+        # Fetch system rates
+        system_rates = await get_resource_rate_map(user["company_id"])
+
+        # Build new rate snapshot (only used roles)
+        new_rate_snapshot = {}
+
+        for role in used_roles:
+
+            if role in old_rates:
+                # Freeze old rate
+                new_rate_snapshot[role] = old_rates[role]
+            else:
+                # Use system rate for new role
+                if role not in system_rates:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No hourly rate found for role: {role}"
+                    )
+                new_rate_snapshot[role] = system_rates[role]
+
+
+        # Recalculate estimation
+        try:
+            estimation = calculate_estimation(
+                calculation_input,
+                new_rate_snapshot
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+        # Store new snapshot
+        update_data["estimation_snapshot"] = {
+            **estimation,
+            "rate_snapshot": new_rate_snapshot,
+            "calculated_at": datetime.utcnow()
+        }
+
+    update_data["updated_at"] = datetime.utcnow()
+
+    # Update project in DB
+    updated_project = await projects_collection.find_one_and_update(
         {
             "_id": ObjectId(project_id),
             "company_id": ObjectId(user["company_id"])
@@ -143,13 +232,12 @@ async def update_project(
         return_document=ReturnDocument.AFTER
     )
 
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     return {
         "message": "Project updated successfully",
-        "project": serialize_ids_only(project)
+        "project": serialize_ids_only(updated_project)
     }
+
+
 
 # Delete Project
 @router.delete("/{project_id}")
