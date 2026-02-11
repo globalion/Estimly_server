@@ -10,4 +10,4 @@ def normalize_role_name(label: str) -> str:
 
 
 def normalize(value: str) -> str:
-    return value.strip().lower()
+    return value.strip().lower().replace(" ", "").replace("/", "")
