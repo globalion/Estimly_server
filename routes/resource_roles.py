@@ -7,7 +7,7 @@ from database.mongo import (
     resource_rate_history_collection
 )
 from dependencies import get_current_user
-from utils.normalize import normalize_role_name
+from utils.normalize import normalize
 from schemas.resource_role import (
     ResourceRoleCreate,
     ResourceRoleUpdate
@@ -24,7 +24,7 @@ async def create_custom_role(
     payload: ResourceRoleCreate,
     user=Depends(get_current_user)
 ):
-    role_name = normalize_role_name(payload.label)
+    role_name = normalize(payload.label)
 
     existing = await resource_roles_collection.find_one({
         "name": role_name,
@@ -111,7 +111,7 @@ async def update_resource_role(
 
     if payload.label:
         new_label = payload.label.strip()
-        new_name = normalize_role_name(new_label)
+        new_name = normalize(new_label)
 
         if new_name != old_name:
             exists = await resource_roles_collection.find_one({
