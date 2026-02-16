@@ -17,4 +17,5 @@ custom_templates_collection = db["custom_templates"]
 estimation_techniques_collection = db["estimation_techniques"]
 resource_roles_collection = db["resource_roles"]
 resource_rate_history_collection = db["resource_rate_history"]
+invites_collection = db["invites_collection"]
 

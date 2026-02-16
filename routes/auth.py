@@ -13,53 +13,67 @@ from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+
 # Signup Endpoint
 @router.post("/signup")
 async def signup(payload: SignupRequest):
-    # 1. Check email uniqueness
+
+    # Check if email already exists
     existing_user = await users_collection.find_one({"email": payload.email})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
 
+    # Normalize company name for consistent comparison
     company_name_norm = normalize(payload.company_name)
 
-    # 2. Find company
-    company = await companies_collection.find_one({"name_normalized": company_name_norm})
+    # Check if company already exists
+    existing_company = await companies_collection.find_one(
+        {"name_normalized": company_name_norm}
+    )
+
+    # Prevent auto-joining existing company
+    if existing_company:
+        raise HTTPException(
+            status_code=400,
+            detail="Company already registered. Please contact your administrator."
+        )
 
     now = datetime.utcnow()
 
-    # 3. Create company if not exists
-    if not company:
-        company_doc = {
-            "name": payload.company_name,
-            "name_normalized": company_name_norm,
-            "industry": None,
-            "company_size": None,
-            "currency": "USD",
-            "date_format": "MM/DD/YYYY",
-            "timezone": "UTC",
-            "created_at": now,
-            "updated_at": now
-        }
-        company_result = await companies_collection.insert_one(company_doc)
-        company_id = company_result.inserted_id
-        role = "ADMIN"
-    else:
-        company_id = company["_id"]
-        role = "USER"
+    # Create new company (First user creates company)
+    company_doc = {
+        "name": payload.company_name,
+        "name_normalized": company_name_norm,
+        "industry": None,
+        "company_size": None,
+        "currency": "USD",
+        "date_format": "MM/DD/YYYY",
+        "timezone": "UTC",
+        "created_at": now,
+        "updated_at": now
+    }
 
-    # 4. Create user
+    company_result = await companies_collection.insert_one(company_doc)
+    company_id = company_result.inserted_id
+
     user_doc = {
         "full_name": payload.full_name,
         "email": payload.email,
         "password_hash": hash_password(payload.password),
-        "role": role,
+        "role": "OWNER",
         "company_id": company_id,
-        "created_at": datetime.utcnow()
+        "created_at": now
     }
-    user_result = await users_collection.insert_one(user_doc)
 
-    return {"message": "User Registered successfully"}  
+    await users_collection.insert_one(user_doc)
+
+    return {
+        "message": "Company and Owner account created successfully"
+    }
+
 
 
 # Login Endpoint
@@ -87,6 +101,7 @@ async def login(payload: LoginRequest):
     }
 
 
+
 # Forgot Password
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
@@ -105,6 +120,7 @@ async def forgot_password(payload: ForgotPasswordRequest):
     await send_reset_email(payload.email, reset_link)
 
     return {"success": True, "message": "Reset link sent to your email"}
+
 
 
 # Reset Password

@@ -26,3 +26,36 @@ async def send_reset_email(email: str, reset_link: str):
 
     fm = FastMail(conf)
     await fm.send_message(message)
+
+
+
+async def send_invite_email(email: str, invite_link: str, role: str):
+
+    message = MessageSchema(
+        subject="You're Invited to Join",
+        recipients=[email],
+        body=f"""
+        <p>Hello,</p>
+
+        <p>You have been invited to join our platform as <strong>{role}</strong>.</p>
+
+        <p>
+            <a href="{invite_link}" 
+               style="padding:10px 15px;background-color:#2563eb;color:white;
+               text-decoration:none;border-radius:5px;">
+               Accept Invitation
+            </a>
+        </p>
+
+        <p>This link will expire in 48 hours.</p>
+
+        <p>If you did not expect this email, please ignore it.</p>
+
+        <br>
+        <p>Regards,<br>Your Team</p>
+        """,
+        subtype="html",
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
