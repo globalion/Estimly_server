@@ -30,7 +30,7 @@ async def get_current_user(
     user["id"] = str(user["_id"])
     user["_id"] = str(user["_id"])
 
-    # 🔥 SAFE handling of company_id
+    # SAFE handling of company_id
     company_id = user.get("company_id")
     user["company_id"] = str(company_id) if company_id else None
 

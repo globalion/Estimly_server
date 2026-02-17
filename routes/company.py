@@ -7,6 +7,7 @@ from dependencies import get_current_user
 from schemas.company import CompanyUpdate
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/api/company", tags=["Company"])
 
@@ -22,10 +23,11 @@ async def get_company(user=Depends(get_current_user)):
     return serialize_ids_only(company)
 
 
+
 @router.patch("/")
 async def update_company(
     payload: CompanyUpdate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("company.settings.manage"))
 ):
     update_data = payload.dict(exclude_unset=True)
 
