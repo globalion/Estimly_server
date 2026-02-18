@@ -318,6 +318,23 @@ async def invite_user(
 
     return {"message": "Invite sent successfully"}
 
+@router.get("/invite-info/{token}")
+async def get_invite_info(token: str):
+    now = datetime.utcnow()
+
+    invite = await invites_collection.find_one({
+        "token": token,
+        "is_used": False,
+        "expires_at": {"$gt": now}
+    })
+
+    if not invite:
+        raise HTTPException(status_code=400, detail="Invalid invite")
+
+    return {
+        "email": invite["email"],
+        "role": invite["role"]
+    }
 
 
 @router.post("/accept-invite")
