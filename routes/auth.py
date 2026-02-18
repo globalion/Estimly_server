@@ -63,7 +63,7 @@ async def signup(payload: SignupRequest):
         "full_name": payload.full_name,
         "email": payload.email,
         "password_hash": hash_password(payload.password),
-        "role": "OWNER",
+        "role": "owner",
         "company_id": company_id,
         "created_at": now
     }
