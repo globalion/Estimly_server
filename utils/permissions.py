@@ -17,6 +17,8 @@ ROLE_PERMISSIONS = {
 
     USER_ROLES["ADMIN"]: [
         "users.invite",
+        "users.read",
+        "users.manage",
         "company.settings.update",
 
         "projects.create",
@@ -39,6 +41,8 @@ ROLE_PERMISSIONS = {
     ],
 
     USER_ROLES["PROJECT_MANAGER"]: [
+        "users.read",
+
         "projects.create",
         "projects.read",
         "projects.update",
@@ -53,6 +57,8 @@ ROLE_PERMISSIONS = {
     ],
 
     USER_ROLES["ESTIMATOR"]: [
+        "users.read",
+
         "projects.create",
         "projects.read",
         "projects.update",
@@ -62,6 +68,7 @@ ROLE_PERMISSIONS = {
     ],
 
     USER_ROLES["VIEWER"]: [
+        "users.read",
         "projects.read",
         "templates.read",
         "roles.read"

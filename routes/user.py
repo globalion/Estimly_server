@@ -13,6 +13,9 @@ from utils.security import hash_password
 from utils.auth_jwt import create_access_token
 from utils.permissions import require_permission
 
+from schemas.user import UpdateUserRequest
+from utils.permissions import require_permission, USER_ROLES
+
 router = APIRouter(
     prefix="/api/user",
     tags=["User"]
@@ -35,6 +38,122 @@ async def get_user_info(
         "name": db_user["full_name"],
         "role": db_user["role"]
     }
+
+# company users
+@router.get("/list")
+async def get_company_users(
+    current_user=Depends(require_permission("users.read"))
+):
+
+    company_id = ObjectId(current_user["company_id"])
+
+    cursor = users_collection.find(
+        {"company_id": company_id},
+        {
+            "full_name": 1,
+            "email": 1,
+            "role": 1
+        }
+    )
+
+    users = await cursor.to_list(length=200)
+
+    return {
+        "users": [
+            {
+                "id": str(user["_id"]),
+                "full_name": user.get("full_name"),
+                "email": user.get("email"),
+                "role": user.get("role")
+            }
+            for user in users
+        ]
+    }
+
+
+# update company user
+@router.patch("/{user_id}")
+async def update_user(
+    user_id: str,
+    payload: UpdateUserRequest,
+    current_user=Depends(require_permission("users.manage"))
+):
+    company_id = ObjectId(current_user["company_id"])
+
+    # Validate user_id
+    try:
+        target_user_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    # Fetch target user
+    target_user = await users_collection.find_one({
+        "_id": target_user_id,
+        "company_id": company_id
+    })
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Extract only provided fields
+    update_fields = payload.dict(exclude_unset=True)
+
+    # Handle full_name update
+    if "full_name" in update_fields:
+        name = update_fields["full_name"].strip()
+
+        if len(name) < 2:
+            raise HTTPException(
+            status_code=400,
+            detail="Full name must be at least 2 characters")
+        
+        if len(name) > 100:
+            raise HTTPException(
+            status_code=400,
+            detail="Full name cannot exceed 100 characters")
+        
+        
+        update_fields["full_name"] = name
+
+
+    # Handle role update
+    if "role" in update_fields:
+
+        new_role = update_fields["role"]
+
+        if new_role not in USER_ROLES.values():
+            raise HTTPException(status_code=400, detail="Invalid role")
+
+        current_role = current_user["role"]
+        target_role = target_user["role"]
+
+        # Admin restrictions
+        if current_role == "admin":
+
+            if target_role == "owner":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Admin cannot modify Owner"
+                )
+
+            if new_role == "owner":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Admin cannot assign Owner role"
+                )
+
+    if not update_fields:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid fields provided for update"
+        )
+
+    await users_collection.update_one(
+        {"_id": target_user_id},
+        {"$set": update_fields}
+    )
+
+    return {"message": "User updated successfully"}
 
 
 
