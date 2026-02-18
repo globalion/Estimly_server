@@ -6,7 +6,8 @@ from schemas.custom_template import CustomTemplateCreate
 from schemas.custom_template import CustomTemplateUpdate
 from database.mongo import custom_templates_collection
 from utils.serializers import serialize_ids_only
-from dependencies import get_current_user
+#from dependencies import get_current_user
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/api/custom-templates", tags=["Templates"])
 
@@ -14,10 +15,9 @@ router = APIRouter(prefix="/api/custom-templates", tags=["Templates"])
 @router.post("/")
 async def create_custom_template(
     payload: CustomTemplateCreate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("templates.create"))
 ):
-    # if user["role"] not in ["manager", "company_admin"]:
-    #     raise HTTPException(403, "Permission denied")
+
 
     template_doc = {
         "name": payload.name,
@@ -44,8 +44,9 @@ async def create_custom_template(
 async def get_custom_templates(
     page: int = 1,
     limit: int = 10,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("templates.read"))
 ):
+
     if page < 1 or limit < 1:
         raise HTTPException(status_code=400, detail="Invalid pagination params")
 
@@ -67,8 +68,9 @@ async def get_custom_templates(
 @router.get("/{template_id}")
 async def get_custom_template_by_id(
     template_id: str,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("templates.read"))
 ):
+
     try:
         template = await custom_templates_collection.find_one({
             "_id": ObjectId(template_id),
@@ -88,8 +90,9 @@ async def get_custom_template_by_id(
 async def update_custom_template(
     template_id: str,
     payload: CustomTemplateUpdate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("templates.update"))
 ):
+
    # Extract only fields sent by frontend
     update_data = payload.dict(exclude_unset=True)
 
@@ -121,8 +124,9 @@ async def update_custom_template(
 @router.delete("/{template_id}")
 async def delete_custom_template(
     template_id: str,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("templates.delete"))
 ):
+
     try:
         result = await custom_templates_collection.delete_one({
             "_id": ObjectId(template_id),
