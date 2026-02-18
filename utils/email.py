@@ -29,13 +29,13 @@ async def send_reset_email(email: str, reset_link: str):
 
 
 
-async def send_invite_email(email: str, invite_link: str, role: str):
+async def send_invite_email(email: str, invite_link: str, role: str, full_name: str):
 
     message = MessageSchema(
         subject="You're Invited to Join",
         recipients=[email],
         body=f"""
-        <p>Hello,</p>
+        <p>Hello {full_name},</p>
 
         <p>You have been invited to join our platform as <strong>{role}</strong>.</p>
 
@@ -49,10 +49,8 @@ async def send_invite_email(email: str, invite_link: str, role: str):
 
         <p>This link will expire in 48 hours.</p>
 
-        <p>If you did not expect this email, please ignore it.</p>
-
         <br>
-        <p>Regards,<br>Your Team</p>
+        <p>Regards,<br>Team</p>
         """,
         subtype="html",
     )

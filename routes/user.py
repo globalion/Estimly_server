@@ -257,6 +257,7 @@ async def delete_user(
     return {"message": "User permanently deleted successfully"}
 
 
+
 @router.post("/invite")
 async def invite_user(
     payload: InviteRequest,
@@ -271,6 +272,10 @@ async def invite_user(
             status_code=403,
             detail="Admin cannot invite Owner"
         )
+
+    # Validate role
+    if payload.role not in USER_ROLES.values():
+        raise HTTPException(status_code=400, detail="Invalid role")
 
     # Check if user already exists
     existing_user = await users_collection.find_one({"email": payload.email})
@@ -295,6 +300,7 @@ async def invite_user(
         invite_doc = {
             "token": token,
             "company_id": ObjectId(current_user["company_id"]),
+            "full_name": payload.full_name, 
             "email": payload.email,
             "role": payload.role,
             "expires_at": now + timedelta(hours=48),
@@ -306,20 +312,23 @@ async def invite_user(
 
     invite_link = f"http://localhost:3000/accept-invite?token={token}"
 
-
     try:
         await send_invite_email(
             email=payload.email,
             invite_link=invite_link,
-            role=payload.role
+            role=payload.role,
+            full_name=payload.full_name
         )
     except Exception as e:
         print("Invite email failed:", str(e))
 
     return {"message": "Invite sent successfully"}
 
+
+
 @router.get("/invite-info/{token}")
 async def get_invite_info(token: str):
+
     now = datetime.utcnow()
 
     invite = await invites_collection.find_one({
@@ -329,12 +338,17 @@ async def get_invite_info(token: str):
     })
 
     if not invite:
-        raise HTTPException(status_code=400, detail="Invalid invite")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid, expired, or already used invite token"
+        )
 
     return {
         "email": invite["email"],
+        "full_name": invite.get("full_name"),
         "role": invite["role"]
     }
+
 
 
 @router.post("/accept-invite")

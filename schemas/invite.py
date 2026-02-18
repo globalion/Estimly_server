@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
 class InviteRequest(BaseModel):
+    full_name: str
     email: EmailStr
     role: str
 
