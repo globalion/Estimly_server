@@ -11,7 +11,7 @@ from utils.email import send_invite_email
 from pymongo import ReturnDocument
 from utils.security import hash_password
 from utils.auth_jwt import create_access_token
-
+from utils.permissions import require_permission
 
 router = APIRouter(
     prefix="/api/user",
@@ -41,15 +41,13 @@ async def get_user_info(
 @router.post("/invite")
 async def invite_user(
     payload: InviteRequest,
-    current_user=Depends(get_current_user)
+    current_user=Depends(require_permission("users.invite"))
 ):
 
-    # Role check
-    if current_user["role"] not in ["OWNER", "ADMIN"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    role = current_user["role"]
 
     # Prevent admin from inviting Owner
-    if current_user["role"] == "ADMIN" and payload.role == "OWNER":
+    if role == "admin" and payload.role == "owner":
         raise HTTPException(
             status_code=403,
             detail="Admin cannot invite Owner"
