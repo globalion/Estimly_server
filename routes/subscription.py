@@ -12,15 +12,44 @@ subscriptions_collection = db["subscriptions"]
 payments_collection = db["payments"]
 
 
+# -------------------------------
+# CREATE ORDER (FREE + PAID)
+# -------------------------------
 @router.post("/create-order")
 async def create_payment(request: CreateOrderRequest):
 
     if request.plan not in PLAN_DETAILS:
-        raise HTTPException(400, "Invalid plan")
+        raise HTTPException(status_code=400, detail="Invalid plan")
 
+    # ✅ Handle FREE plan properly
     if request.plan == "free":
-        return {"message": "Free plan activated without payment"}
 
+        existing = await subscriptions_collection.find_one(
+            {"user_id": request.user_id}
+        )
+
+        start_date, end_date = calculate_dates(request.plan, existing)
+
+        await subscriptions_collection.update_one(
+            {"user_id": request.user_id},
+            {"$set": {
+                "user_id": request.user_id,
+                "plan": "free",
+                "start_date": start_date,
+                "end_date": end_date,
+                "status": "active",
+                "updated_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
+        return {
+            "message": "Free plan activated",
+            "start_date": start_date,
+            "end_date": end_date
+        }
+
+    # ✅ Paid plan – create Razorpay order
     order = create_order(request.plan)
 
     return {
@@ -30,8 +59,14 @@ async def create_payment(request: CreateOrderRequest):
     }
 
 
+# -------------------------------
+# VERIFY PAYMENT (PAID PLANS)
+# -------------------------------
 @router.post("/verify")
 async def verify_payment_route(request: VerifyPaymentRequest):
+
+    if request.plan not in PLAN_DETAILS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
 
     try:
         verify_signature({
@@ -39,8 +74,8 @@ async def verify_payment_route(request: VerifyPaymentRequest):
             "razorpay_payment_id": request.razorpay_payment_id,
             "razorpay_signature": request.razorpay_signature
         })
-    except:
-        raise HTTPException(400, "Invalid signature")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
     existing = await subscriptions_collection.find_one(
         {"user_id": request.user_id}
@@ -48,9 +83,11 @@ async def verify_payment_route(request: VerifyPaymentRequest):
 
     start_date, end_date = calculate_dates(request.plan, existing)
 
+    # ✅ Update subscription
     await subscriptions_collection.update_one(
         {"user_id": request.user_id},
         {"$set": {
+            "user_id": request.user_id,
             "plan": request.plan,
             "start_date": start_date,
             "end_date": end_date,
@@ -60,6 +97,7 @@ async def verify_payment_route(request: VerifyPaymentRequest):
         upsert=True
     )
 
+    # ✅ Save payment record
     await payments_collection.insert_one({
         "user_id": request.user_id,
         "plan": request.plan,
@@ -75,6 +113,9 @@ async def verify_payment_route(request: VerifyPaymentRequest):
     }
 
 
+# -------------------------------
+# GET SUBSCRIPTION
+# -------------------------------
 @router.get("/{user_id}")
 async def get_subscription(user_id: str):
 
@@ -83,11 +124,15 @@ async def get_subscription(user_id: str):
         {"_id": 0}
     )
 
+    # ✅ If no subscription → return default free
     if not sub:
-        return {"plan": "free"}
+        return {
+            "plan": "free",
+            "status": "active"
+        }
 
-    if sub["end_date"] < datetime.utcnow():
+    # ✅ Check expiry safely
+    if sub.get("end_date") and sub["end_date"] < datetime.utcnow():
         sub["status"] = "expired"
 
     return sub
-
