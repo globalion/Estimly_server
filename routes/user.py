@@ -71,6 +71,44 @@ async def get_company_users(
     }
 
 
+
+@router.get("/{user_id}")
+async def get_single_user(
+    user_id: str,
+    current_user=Depends(require_permission("users.read"))
+):
+    # Validate user_id format
+    try:
+        target_user_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    company_id = ObjectId(current_user["company_id"])
+
+    # Fetch user from same company
+    user = await users_collection.find_one(
+        {
+            "_id": target_user_id,
+            "company_id": company_id
+        },
+        {
+            "full_name": 1,
+            "email": 1,
+            "role": 1
+        }
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": str(user["_id"]),
+        "full_name": user.get("full_name"),
+        "email": user.get("email"),
+        "role": user.get("role")
+    }
+
+
 # update company user
 @router.patch("/{user_id}")
 async def update_user(
