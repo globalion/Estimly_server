@@ -9,7 +9,7 @@ USER_ROLES = {
     "ESTIMATOR": "estimator",
     "VIEWER": "viewer"
 }
-
+    
 
 ROLE_PERMISSIONS = {
 
@@ -17,22 +17,25 @@ ROLE_PERMISSIONS = {
 
     USER_ROLES["ADMIN"]: [
         "users.invite",
-        "company.settings.manage",
+        "company.settings.update",
+
         "projects.create",
         "projects.read",
         "projects.update",
         "projects.delete",
         "projects.change_status",
+
         "templates.create",
         "templates.read",
         "templates.update",
         "templates.delete",
+
         "roles.create",
         "roles.read",
         "roles.update",
         "roles.delete",
         "roles.reset_defaults",
-        "roles.history.view"
+        "roles.history.read"
     ],
 
     USER_ROLES["PROJECT_MANAGER"]: [
@@ -40,18 +43,20 @@ ROLE_PERMISSIONS = {
         "projects.read",
         "projects.update",
         "projects.change_status",
+
         "templates.create",
         "templates.read",
         "templates.update",
-        "roles.read",
-        "roles.history.view"
 
+        "roles.read",
+        "roles.history.read"
     ],
 
     USER_ROLES["ESTIMATOR"]: [
         "projects.create",
         "projects.read",
         "projects.update",
+
         "templates.read",
         "roles.read"
     ],
@@ -62,6 +67,7 @@ ROLE_PERMISSIONS = {
         "roles.read"
     ]
 }
+
 
 
 def require_permission(permission: str):
