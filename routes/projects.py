@@ -3,12 +3,13 @@ from datetime import datetime
 from bson import ObjectId
 from pymongo import ReturnDocument
 from database.mongo import projects_collection
-from dependencies import get_current_user
+#from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
 from services.resource_rates import get_resource_rate_map
 from services.cost_timeline_engine import calculate_estimation
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/api/projects", tags=["Projects"])
 @router.post("/")
 async def create_project(
     payload: ProjectCreate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("projects.create"))
 ):
     name_norm = normalize(payload.name)
     client_norm = normalize(payload.client_name)
@@ -77,8 +78,9 @@ async def create_project(
 async def get_projects(
     page: int = 1,
     limit: int = 10,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("projects.read"))
 ):
+
     if page < 1 or limit < 1:
         raise HTTPException(status_code=400, detail="Invalid pagination params")
 
@@ -100,8 +102,9 @@ async def get_projects(
 @router.get("/{project_id}")
 async def get_project(
     project_id: str,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("projects.read"))
 ):
+
     project = await projects_collection.find_one({
         "_id": ObjectId(project_id),
         "company_id": ObjectId(user["company_id"])
@@ -118,8 +121,9 @@ async def get_project(
 async def update_project(
     project_id: str,
     payload: ProjectUpdate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("projects.update"))
 ):
+
     update_data = payload.dict(exclude_unset=True)
 
     if not update_data:
@@ -131,8 +135,18 @@ async def update_project(
         "company_id": ObjectId(user["company_id"])
     })
 
+
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    
+    # Estimator cann not allowed to modify project if project status not under draft
+    if user["role"] == "estimator" and project["status"] != "draft":
+        raise HTTPException(
+        status_code=403,
+        detail="Estimator can only modify draft projects"
+    )
+
 
     # Normalize basic fields
     if "name" in update_data:
@@ -243,8 +257,9 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("projects.delete"))
 ):
+
     result = await projects_collection.delete_one({
         "_id": ObjectId(project_id),
         "company_id": ObjectId(user["company_id"])
