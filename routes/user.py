@@ -71,7 +71,7 @@ async def get_company_users(
     }
 
 
-
+# get single user
 @router.get("/{user_id}")
 async def get_single_user(
     user_id: str,
@@ -193,6 +193,68 @@ async def update_user(
 
     return {"message": "User updated successfully"}
 
+
+
+# delete user
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user=Depends(require_permission("users.delete"))
+):
+
+    company_id = ObjectId(current_user["company_id"])
+
+    # Validate ObjectId
+    try:
+        target_user_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    # Fetch target user
+    target_user = await users_collection.find_one({
+        "_id": target_user_id,
+        "company_id": company_id
+    })
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent self delete
+    if str(target_user["_id"]) == current_user["_id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot delete yourself"
+        )
+
+    current_role = current_user["role"]
+    target_role = target_user["role"]
+
+    # Admin restrictions
+    if current_role == "admin" and target_role == "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin cannot delete Owner"
+        )
+
+    # Prevent deleting last owner
+    if target_role == "owner":
+
+        owner_count = await users_collection.count_documents({
+            "company_id": company_id,
+            "role": "owner"
+        })
+
+        if owner_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the last owner of the company"
+            )
+
+    await users_collection.delete_one({
+        "_id": target_user_id
+    })
+
+    return {"message": "User permanently deleted successfully"}
 
 
 @router.post("/invite")

@@ -19,6 +19,7 @@ ROLE_PERMISSIONS = {
         "users.invite",
         "users.read",
         "users.manage",
+        "users.delete",
         "company.settings.update",
 
         "projects.create",
