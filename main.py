@@ -16,6 +16,7 @@ from internal.admin_estimation_techniques import admin_estimation_techniques_rou
 from routes.social_auth import router as social_auth_router
 from routes.resource_roles import router as resource_roles_router
 from routes.estimation_calculate import router as estimation_calculate_router
+from routes import subscription
 
 app = FastAPI(title="Estimly Backend")
 
@@ -53,6 +54,7 @@ app.include_router(admin_built_in_templates_router)
 app.include_router(admin_estimation_techniques_router)
 app.include_router(social_auth_router)
 app.include_router(resource_roles_router)
+app.include_router(subscription.router)
 
 @app.get("/")
 def health():
