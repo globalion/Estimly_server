@@ -6,12 +6,14 @@ from database.mongo import (
     resource_roles_collection,
     resource_rate_history_collection
 )
-from dependencies import get_current_user
+#from dependencies import get_current_user
 from utils.normalize import normalize
 from schemas.resource_role import (
     ResourceRoleCreate,
     ResourceRoleUpdate
 )
+
+from utils.permissions import require_permission
 
 router = APIRouter(
     prefix="/api/resource-roles",
@@ -22,8 +24,9 @@ router = APIRouter(
 @router.post("/")
 async def create_custom_role(
     payload: ResourceRoleCreate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("roles.create"))
 ):
+    
     role_name = normalize(payload.label)
 
     existing = await resource_roles_collection.find_one({
@@ -75,8 +78,9 @@ async def create_custom_role(
 async def update_resource_role(
     role_id: str,
     payload: ResourceRoleUpdate,
-    user=Depends(get_current_user)
+    user=Depends(require_permission("roles.update"))
 ):
+
     role = await resource_roles_collection.find_one({
         "_id": ObjectId(role_id),
         "$or": [
@@ -181,7 +185,11 @@ async def update_resource_role(
 
 # Delete Custom role
 @router.delete("/{role_id}")
-async def delete_role(role_id: str, user=Depends(get_current_user)):
+async def delete_role(
+    role_id: str,
+    user=Depends(require_permission("roles.delete"))
+):
+
     role = await resource_roles_collection.find_one({
         "_id": ObjectId(role_id),
         "company_id": ObjectId(user["company_id"])
@@ -215,7 +223,10 @@ async def delete_role(role_id: str, user=Depends(get_current_user)):
 
 # Reset Default role
 @router.post("/reset-defaults")
-async def reset_default_roles(user=Depends(get_current_user)):
+async def reset_default_roles(
+    user=Depends(require_permission("roles.reset_defaults"))
+):
+
     now = datetime.utcnow()
 
     default_roles = await resource_roles_collection.find(
@@ -264,7 +275,9 @@ async def reset_default_roles(user=Depends(get_current_user)):
 
 # Get All roles
 @router.get("/")
-async def get_roles(user=Depends(get_current_user)):
+async def get_roles(
+    user=Depends(require_permission("roles.read"))
+):
 
     roles = await resource_roles_collection.find({
     "$or": [
@@ -303,7 +316,10 @@ async def get_roles(user=Depends(get_current_user)):
 
 # Get all role history
 @router.get("/history")
-async def get_all_rate_history(user=Depends(get_current_user)):
+async def get_all_rate_history(
+    user=Depends(require_permission("roles.history.read"))
+):
+
 
     history = await resource_rate_history_collection.find({
     "company_id": ObjectId(user["company_id"])
@@ -327,7 +343,11 @@ async def get_all_rate_history(user=Depends(get_current_user)):
 
 # Get single role
 @router.get("/{role_id}")
-async def get_role_id(role_id: str, user=Depends(get_current_user)):
+async def get_role_id(
+    role_id: str,
+    user=Depends(require_permission("roles.read"))
+):
+
     role = await resource_roles_collection.find_one({
         "_id": ObjectId(role_id),
         "$or": [
@@ -358,7 +378,11 @@ async def get_role_id(role_id: str, user=Depends(get_current_user)):
 
 # Get single role history
 @router.get("/{role_id}/history")
-async def get_role_history(role_id: str, user=Depends(get_current_user)):
+async def get_role_history(
+    role_id: str,
+    user=Depends(require_permission("roles.history.read"))
+):
+
     history = await resource_rate_history_collection.find(
         {
   "role_id": ObjectId(role_id),
