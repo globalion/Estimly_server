@@ -16,33 +16,50 @@ ROLE_PERMISSIONS = {
     USER_ROLES["OWNER"]: ["*"],
 
     USER_ROLES["ADMIN"]: [
-        "users.manage",
-        "users.assign_roles",
+        "users.invite",
         "company.settings.manage",
-        "projects.view_all",
-        "estimates.view_all"
+        "projects.create",
+        "projects.read",
+        "projects.update",
+        "projects.delete",
+        "projects.change_status",
+        "templates.create",
+        "templates.read",
+        "templates.update",
+        "templates.delete",
+        "roles.create",
+        "roles.read",
+        "roles.update",
+        "roles.delete",
+        "roles.reset_defaults",
+        "roles.history.view"
     ],
 
     USER_ROLES["PROJECT_MANAGER"]: [
         "projects.create",
-        "estimates.view_all",
-        "estimates.review",
-        "estimates.approve",
-        "estimates.lock",
-        "reports.view"
+        "projects.read",
+        "projects.update",
+        "projects.change_status",
+        "templates.create",
+        "templates.read",
+        "templates.update",
+        "roles.read",
+        "roles.history.view"
+
     ],
 
     USER_ROLES["ESTIMATOR"]: [
-        "estimates.create",
-        "estimates.edit_draft",
-        "estimates.submit",
-        "estimates.view_team"
+        "projects.create",
+        "projects.read",
+        "projects.update",
+        "templates.read",
+        "roles.read"
     ],
 
     USER_ROLES["VIEWER"]: [
-        "projects.view",
-        "estimates.view",
-        "reports.view"
+        "projects.read",
+        "templates.read",
+        "roles.read"
     ]
 }
 
