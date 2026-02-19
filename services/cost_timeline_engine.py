@@ -126,7 +126,14 @@ def calculate_estimation(project, resource_rates):
             "weeks_required": weeks_required,
             "months_estimate": (weeks_required / 4).__ceil__(),
             "sprints_required": sprints_required,
-            "estimated_team_size": project["estimated_team_size"]
+            "estimated_team_size": project["estimated_team_size"],
+             
+            "assumptions": {
+            "working_hours_per_day": DEFAULT_SETTINGS["working_hours_per_day"],
+            "working_days_per_week": DEFAULT_SETTINGS["working_days_per_week"],
+            "sprint_duration_weeks": DEFAULT_SETTINGS["sprint_duration_weeks"],
+            "resource_efficiency_percent": 80
+            }
         },
 
         "resource_allocation": resource_allocation,
