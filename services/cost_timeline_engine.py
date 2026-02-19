@@ -1,9 +1,4 @@
-from core.estimation_constants import (
-    COMPLEXITY_MULTIPLIERS,
-    DEFAULT_SETTINGS
-)
-
-def calculate_task_cost(task, resource_rates):
+def calculate_task_cost(task, resource_rates, settings):
     hours = task["hours"]
     role = task["role"]
     level = task["level"]
@@ -12,15 +7,22 @@ def calculate_task_cost(task, resource_rates):
         raise ValueError(f"Hourly rate not found for role: {role}")
 
     hourly_rate = resource_rates[role]
-    multiplier = COMPLEXITY_MULTIPLIERS.get(level, 1)
+
+    # Use DB complexity multipliers
+    multiplier = settings["complexity_multipliers"].get(level, 1)
 
     adjusted_hours = hours * multiplier
-    cost = adjusted_hours * hourly_rate * DEFAULT_SETTINGS["productivity_factor"]
+
+    cost = (
+        adjusted_hours
+        * hourly_rate
+        * settings["productivity_factor"]
+    )
 
     return adjusted_hours, cost, role, hourly_rate
 
 
-def calculate_estimation(project, resource_rates):
+def calculate_estimation(project, resource_rates, settings):
     total_hours = 0
     total_cost = 0
 
@@ -36,7 +38,8 @@ def calculate_estimation(project, resource_rates):
             for task in feature["tasks"]:
                 adj_hours, cost, role, hourly_rate = calculate_task_cost(
                     task,
-                    resource_rates
+                    resource_rates,
+                    settings
                 )
 
                 module_hours += adj_hours
@@ -46,8 +49,6 @@ def calculate_estimation(project, resource_rates):
                 total_cost += cost
 
                 resource_hours[role] = resource_hours.get(role, 0) + adj_hours
-
-                # Store used rate snapshot
                 used_roles_snapshot[role] = hourly_rate
 
         modules.append({
@@ -56,7 +57,7 @@ def calculate_estimation(project, resource_rates):
             "cost": round(module_cost)
         })
 
-    # Pricing
+    # Pricing 
     risk_amount = total_cost * project["risk_buffer"] / 100
     cost_with_risk = total_cost + risk_amount
 
@@ -69,21 +70,27 @@ def calculate_estimation(project, resource_rates):
     profit = final_price - total_cost
     profit_percent = (profit / total_cost * 100) if total_cost else 0
 
-    # Timeline
+    
+    # Timeline 
     hours_per_week = (
-        DEFAULT_SETTINGS["working_hours_per_day"]
-        * DEFAULT_SETTINGS["working_days_per_week"]
+        settings["working_hours_per_day"]
+        * settings["working_days_per_week"]
     )
 
     available_hours_per_week = (
-        hours_per_week * project["estimated_team_size"] * 0.8
+        hours_per_week
+        * project["estimated_team_size"]
+        * 0.8
     )
 
     weeks_required = (total_hours / available_hours_per_week).__ceil__()
+
     sprints_required = (
-        weeks_required / DEFAULT_SETTINGS["sprint_duration_weeks"]
+        weeks_required
+        / settings["sprint_duration_weeks"]
     ).__ceil__()
 
+    
     # Resource Allocation 
     resource_allocation = [
         {
@@ -127,16 +134,15 @@ def calculate_estimation(project, resource_rates):
             "months_estimate": (weeks_required / 4).__ceil__(),
             "sprints_required": sprints_required,
             "estimated_team_size": project["estimated_team_size"],
-             
+
             "assumptions": {
-            "working_hours_per_day": DEFAULT_SETTINGS["working_hours_per_day"],
-            "working_days_per_week": DEFAULT_SETTINGS["working_days_per_week"],
-            "sprint_duration_weeks": DEFAULT_SETTINGS["sprint_duration_weeks"],
-            "resource_efficiency_percent": 80
+                "working_hours_per_day": settings["working_hours_per_day"],
+                "working_days_per_week": settings["working_days_per_week"],
+                "sprint_duration_weeks": settings["sprint_duration_weeks"],
+                "resource_efficiency_percent": 80
             }
         },
 
         "resource_allocation": resource_allocation,
         "rate_snapshot": used_roles_snapshot
     }
-

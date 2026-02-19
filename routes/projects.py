@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from bson import ObjectId
 from pymongo import ReturnDocument
-from database.mongo import projects_collection
+from database.mongo import projects_collection, estimation_settings_collection
 #from dependencies import get_current_user
 from schemas.project import ProjectCreate, ProjectUpdate
 from utils.normalize import normalize
@@ -39,9 +39,20 @@ async def create_project(
     project_data = payload.model_dump(mode="json")
 
     rates = await get_resource_rate_map(user["company_id"])
+
+    # Fetch company estimation settings
+    settings = await estimation_settings_collection.find_one(
+        {"company_id": ObjectId(user["company_id"])}
+        )
+    
+    if not settings:
+        raise HTTPException(
+            status_code=500,
+            detail="Estimation settings not configured for this company"
+            )
     
     # calculate estimation while creating project
-    estimation_result = calculate_estimation(project_data, rates)
+    estimation_result = calculate_estimation(project_data,rates,settings)
 
     project = {
         **project_data,
@@ -217,11 +228,23 @@ async def update_project(
                 new_rate_snapshot[role] = system_rates[role]
 
 
+        # Fetch company estimation settings
+        settings = await estimation_settings_collection.find_one(
+            {"company_id": ObjectId(user["company_id"])}
+            )
+        
+        if not settings:
+            raise HTTPException(
+                status_code=500,
+                detail="Estimation settings not configured for this company"
+                )
+
         # Recalculate estimation
         try:
             estimation = calculate_estimation(
                 calculation_input,
-                new_rate_snapshot
+                new_rate_snapshot,
+                settings
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

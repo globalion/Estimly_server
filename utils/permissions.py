@@ -38,7 +38,10 @@ ROLE_PERMISSIONS = {
         "roles.update",
         "roles.delete",
         "roles.reset_defaults",
-        "roles.history.read"
+        "roles.history.read",
+
+        "estimation_settings.read",
+        "estimation_settings.update"
     ],
 
     USER_ROLES["PROJECT_MANAGER"]: [
@@ -54,7 +57,9 @@ ROLE_PERMISSIONS = {
         "templates.update",
 
         "roles.read",
-        "roles.history.read"
+        "roles.history.read",
+
+        "estimation_settings.read"
     ],
 
     USER_ROLES["ESTIMATOR"]: [
@@ -65,14 +70,17 @@ ROLE_PERMISSIONS = {
         "projects.update",
 
         "templates.read",
-        "roles.read"
+        "roles.read",
+
+        "estimation_settings.read"
     ],
 
     USER_ROLES["VIEWER"]: [
         "users.read",
         "projects.read",
         "templates.read",
-        "roles.read"
+        "roles.read",
+        "estimation_settings.read"
     ]
 }
 

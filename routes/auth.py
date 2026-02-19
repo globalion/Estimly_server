@@ -3,13 +3,15 @@ from datetime import datetime
 from bson import ObjectId
 
 from database.mongo import users_collection, companies_collection
-from schemas.auth import SignupRequest, LoginRequest, UserResponse
+from schemas.auth import SignupRequest, LoginRequest
 from utils.security import hash_password, verify_password
 from utils.auth_jwt import create_access_token
 from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
 from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
+from database.mongo import estimation_settings_collection
+
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -58,6 +60,25 @@ async def signup(payload: SignupRequest):
 
     company_result = await companies_collection.insert_one(company_doc)
     company_id = company_result.inserted_id
+    
+    # Insert default estimation settings
+    estimation_settings_doc = {
+        "company_id": company_id,
+        "complexity_multipliers": {
+             "low": 1.0,
+             "medium": 1.3,
+             "high": 1.6,
+             "extreme": 2.0
+             },
+        "productivity_factor": 0.85,
+        "sprint_duration_weeks": 2,
+        "working_hours_per_day": 8,
+        "working_days_per_week": 5,
+        "created_at": now,
+        "updated_at": now
+        }
+    
+    await estimation_settings_collection.insert_one(estimation_settings_doc)
 
     user_doc = {
         "full_name": payload.full_name,
