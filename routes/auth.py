@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from bson import ObjectId
+
 from database.mongo import users_collection, companies_collection, estimation_settings_collection, client
 from schemas.auth import SignupRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest
 from utils.security import hash_password, verify_password, validate_strong_password
@@ -165,9 +166,10 @@ async def reset_password(payload: ResetPasswordRequest):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
     
+    
     validate_strong_password(payload.new_password)
 
-    #  new password should NOT be same as old password
+    # new password should not be same as old password
     if verify_password(payload.new_password, user["password_hash"]):
         raise HTTPException(
             status_code=400,
@@ -178,10 +180,8 @@ async def reset_password(payload: ResetPasswordRequest):
         {"_id": user["_id"]},
         {
             "$set": {
-                "password_hash": hash_password(payload.new_password),
-                "updated_at": datetime.utcnow()
-            }
-        }
-    )
+            "password_hash": hash_password(payload.new_password),
+            "updated_at": datetime.utcnow()
+        } })
 
-    return {"success": True, "message": "Password reset successfully"}
+    return {"success": True, "message": "Password reset successfully"}  
