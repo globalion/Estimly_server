@@ -1,16 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from bson import ObjectId
-
-from database.mongo import users_collection, companies_collection
-from schemas.auth import SignupRequest, LoginRequest
-from utils.security import hash_password, verify_password
+from database.mongo import users_collection, companies_collection, estimation_settings_collection, client
+from schemas.auth import SignupRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest
+from utils.security import hash_password, verify_password, validate_strong_password
 from utils.auth_jwt import create_access_token
 from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
-from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
-from database.mongo import estimation_settings_collection
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -19,6 +16,8 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 # Signup Endpoint
 @router.post("/signup")
 async def signup(payload: SignupRequest):
+
+    validate_strong_password(payload.password)
 
     # Check if email already exists
     existing_user = await users_collection.find_one({"email": payload.email})
@@ -45,51 +44,62 @@ async def signup(payload: SignupRequest):
 
     now = datetime.utcnow()
 
-    # Create new company (First user creates company)
-    company_doc = {
-        "name": payload.company_name,
-        "name_normalized": company_name_norm,
-        "industry": None,
-        "company_size": None,
-        "currency": "USD",
-        "date_format": "MM/DD/YYYY",
-        "timezone": "UTC",
-        "created_at": now,
-        "updated_at": now
-    }
+    # Apply MongoDB transaction
+    async with await client.start_session() as session:
+        async with session.start_transaction():
 
-    company_result = await companies_collection.insert_one(company_doc)
-    company_id = company_result.inserted_id
-    
-    # Insert default estimation settings
-    estimation_settings_doc = {
-        "company_id": company_id,
-        "complexity_multipliers": {
-             "low": 1.0,
-             "medium": 1.3,
-             "high": 1.6,
-             "extreme": 2.0
-             },
-        "productivity_factor": 0.85,
-        "sprint_duration_weeks": 2,
-        "working_hours_per_day": 8,
-        "working_days_per_week": 5,
-        "created_at": now,
-        "updated_at": now
-        }
-    
-    await estimation_settings_collection.insert_one(estimation_settings_doc)
+            company_doc = {
+                "name": payload.company_name,
+                "name_normalized": company_name_norm,
+                "industry": None,
+                "company_size": None,
+                "currency": "USD",
+                "date_format": "MM/DD/YYYY",
+                "timezone": "UTC",
+                "created_at": now,
+                "updated_at": now
+            }
 
-    user_doc = {
-        "full_name": payload.full_name,
-        "email": payload.email,
-        "password_hash": hash_password(payload.password),
-        "role": "owner",
-        "company_id": company_id,
-        "created_at": now
-    }
+            company_result = await companies_collection.insert_one(
+                company_doc,
+                session=session
+            )
+            company_id = company_result.inserted_id
 
-    await users_collection.insert_one(user_doc)
+            estimation_settings_doc = {
+                "company_id": company_id,
+                "complexity_multipliers": {
+                    "low": 1.0,
+                    "medium": 1.3,
+                    "high": 1.6,
+                    "extreme": 2.0
+                },
+                "productivity_factor": 0.85,
+                "sprint_duration_weeks": 2,
+                "working_hours_per_day": 8,
+                "working_days_per_week": 5,
+                "created_at": now,
+                "updated_at": now
+            }
+
+            await estimation_settings_collection.insert_one(
+                estimation_settings_doc,
+                session=session
+            )
+
+            user_doc = {
+                "full_name": payload.full_name,
+                "email": payload.email,
+                "password_hash": hash_password(payload.password),
+                "role": "owner",
+                "company_id": company_id,
+                "created_at": now
+            }
+
+            await users_collection.insert_one(
+                user_doc,
+                session=session
+            )
 
     return {
         "message": "Company and Owner account created successfully"
@@ -155,7 +165,9 @@ async def reset_password(payload: ResetPasswordRequest):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
     
-    #  CHECK: new password should NOT be same as old password
+    validate_strong_password(payload.new_password)
+
+    #  new password should NOT be same as old password
     if verify_password(payload.new_password, user["password_hash"]):
         raise HTTPException(
             status_code=400,
@@ -164,7 +176,12 @@ async def reset_password(payload: ResetPasswordRequest):
 
     await users_collection.update_one(
         {"_id": user["_id"]},
-        {"$set": {"password_hash": hash_password(payload.new_password)}}
+        {
+            "$set": {
+                "password_hash": hash_password(payload.new_password),
+                "updated_at": datetime.utcnow()
+            }
+        }
     )
 
-    return {"success": True, "message": "Password reset successfully"}  
+    return {"success": True, "message": "Password reset successfully"}
