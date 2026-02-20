@@ -470,6 +470,9 @@ async def accept_invite(payload: AcceptInviteRequest):
     existing_user = await users_collection.find_one({"email": invite["email"]})
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
+    
+
+    validate_strong_password(payload.password)
 
     # Create user
     user_doc = {
