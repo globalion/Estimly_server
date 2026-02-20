@@ -14,6 +14,9 @@ from schemas.resource_role import (
 )
 
 from utils.permissions import require_permission
+from utils.serializers import serialize_ids_only
+from pymongo import ReturnDocument
+
 
 router = APIRouter(
     prefix="/api/resource-roles",
@@ -73,7 +76,7 @@ async def create_custom_role(
     return {"message": "Custom role created successfully"}
 
 
-# Update Role
+# update role
 @router.patch("/{role_id}")
 async def update_resource_role(
     role_id: str,
@@ -81,8 +84,13 @@ async def update_resource_role(
     user=Depends(require_permission("roles.update"))
 ):
 
+    try:
+        role_object_id = ObjectId(role_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid role ID")
+
     role = await resource_roles_collection.find_one({
-        "_id": ObjectId(role_id),
+        "_id": role_object_id,
         "$or": [
             {"type": "default"},
             {"company_id": ObjectId(user["company_id"])}
@@ -90,7 +98,7 @@ async def update_resource_role(
     })
 
     if not role:
-        raise HTTPException(404, "Role not found")
+        raise HTTPException(status_code=404, detail="Role not found")
 
     now = datetime.utcnow()
 
@@ -98,30 +106,41 @@ async def update_resource_role(
     old_label = role["label"]
     old_rate = role["hourly_rate"]
 
-    new_name = old_name
-    new_label = old_label
-    new_rate = old_rate
-
     updates = {}
     name_changed = False
     rate_changed = False
 
-    if role["type"] == "default":
-        if payload.label:
-            raise HTTPException(
-                status_code=400,
-                detail="Default role name cannot be changed"
-            )
+    # Prevent renaming default roles
+    if role["type"] == "default" and payload.label:
+        raise HTTPException(
+            status_code=400,
+            detail="Default role name cannot be changed"
+        )
 
+    
+    # Handle Label Change
     if payload.label:
         new_label = payload.label.strip()
+
+        if len(new_label) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Role name must be at least 2 characters"
+            )
+
+        if len(new_label) > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Role name cannot exceed 100 characters"
+            )
+
         new_name = normalize(new_label)
 
         if new_name != old_name:
             exists = await resource_roles_collection.find_one({
                 "name": new_name,
                 "is_active": True,
-                "_id": {"$ne": ObjectId(role_id)},
+                "_id": {"$ne": role_object_id},
                 "$or": [
                     {"type": "default"},
                     {"company_id": ObjectId(user["company_id"])}
@@ -129,15 +148,19 @@ async def update_resource_role(
             })
 
             if exists:
-                raise HTTPException(409, "Role with this name already exists")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Role with this name already exists"
+                )
 
             updates["name"] = new_name
             updates["label"] = new_label
             name_changed = True
 
+
+    # Handle Rate Change
     if payload.hourly_rate is not None and payload.hourly_rate != old_rate:
-        new_rate = payload.hourly_rate
-        updates["hourly_rate"] = new_rate
+        updates["hourly_rate"] = payload.hourly_rate
         rate_changed = True
 
     if not updates:
@@ -145,42 +168,44 @@ async def update_resource_role(
 
     updates["updated_at"] = now
 
-    action = "renamed" if name_changed else "updated"
-        
+    final_label = updates.get("label", old_label)
+    final_rate = updates.get("hourly_rate", old_rate)
+
+    # History 
     history_entry = {
         "role_id": role["_id"],
-        "role_name": old_name,     
-        "role_label": (
-        new_label if name_changed else old_label
-    ),        
-        "action": action,
+        "role_name": old_name,
+        "role_label": final_label,
+        "action": "renamed" if name_changed else "updated",
         "old_rate": old_rate,
-        "new_rate": new_rate,
-        "change_percent": None,
+        "new_rate": final_rate,
+        "change_percent": (
+            round(((updates["hourly_rate"] - old_rate) / old_rate) * 100, 2)
+            if rate_changed and old_rate
+            else None
+        ),
         "company_id": ObjectId(user["company_id"]),
         "changed_by": ObjectId(user["_id"]),
         "changed_at": now
     }
 
-    if rate_changed:
-        history_entry["old_rate"] = old_rate
-        history_entry["new_rate"] = new_rate
-        history_entry["change_percent"] = round(
-        ((new_rate - old_rate) / old_rate) * 100, 2
-    ) if old_rate else 0
-
     if name_changed:
         history_entry["old_label"] = old_label
-        history_entry["new_label"] = new_label
+        history_entry["new_label"] = updates["label"]
 
     await resource_rate_history_collection.insert_one(history_entry)
 
-    await resource_roles_collection.update_one(
-        {"_id": role["_id"]},
-        {"$set": updates}
+    updated_role = await resource_roles_collection.find_one_and_update(
+        {"_id": role_object_id},
+        {"$set": updates},
+        return_document=ReturnDocument.AFTER
     )
 
-    return {"message": "Role updated successfully", "action": action}
+    return {
+        "message": "Role updated successfully",
+        "data": serialize_ids_only(updated_role)
+    }
+
 
 
 # Delete Custom role
