@@ -1,22 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
-from bson import ObjectId
 import secrets
-
+from fastapi import APIRouter, Depends, HTTPException
+from bson import ObjectId
+from pymongo import ReturnDocument
 from database.mongo import users_collection, invites_collection
 from dependencies import get_current_user
-from schemas.invite import InviteRequest, AcceptInviteRequest
-from utils.email import send_invite_email
-
-from utils.security import hash_password
-from utils.auth_jwt import create_access_token
-from utils.permissions import require_permission
-
-from schemas.user import UpdateUserRequest
 from utils.permissions import require_permission, USER_ROLES
-from schemas.user import UserProfileUpdate
+from schemas.invite import InviteRequest, AcceptInviteRequest
+from schemas.change_password import ChangePasswordRequest
+from schemas.user import UpdateUserRequest, UserProfileUpdate
+from utils.email import send_invite_email
+from utils.security import verify_password, hash_password, validate_strong_password
+from utils.auth_jwt import create_access_token
 from utils.serializers import serialize_ids_only
-from pymongo import ReturnDocument
 
 
 router = APIRouter(
@@ -138,6 +134,60 @@ async def update_profile(
         "message": "Profile updated successfully",
         "data": serialize_ids_only(updated_user)
     }
+
+
+#change password
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    user=Depends(get_current_user)
+):
+
+    db_user = await users_collection.find_one(
+        {"_id": ObjectId(user["_id"])}
+    )
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verify current password
+    if not verify_password(payload.current_password, db_user["password_hash"]):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect"
+        )
+
+    # Prevent reuse
+    if verify_password(payload.new_password, db_user["password_hash"]):
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from current password"
+        )
+
+    # Validate strong password policy
+    validate_strong_password(payload.new_password)
+
+    # Hash new password
+    new_password_hash = hash_password(payload.new_password)
+
+    updated_user = await users_collection.find_one_and_update(
+        {"_id": ObjectId(user["_id"])},
+        {
+            "$set": {
+                "password_hash": new_password_hash,"updated_at": datetime.utcnow()
+                }
+        },
+        return_document=ReturnDocument.AFTER
+    )
+    
+    if not updated_user:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update password"
+            )
+    
+    return {"message": "Password changed successfully"}
+
 
 
 # update company user by admin or owner
