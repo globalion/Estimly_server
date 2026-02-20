@@ -8,13 +8,16 @@ from dependencies import get_current_user
 from schemas.invite import InviteRequest, AcceptInviteRequest
 from utils.email import send_invite_email
 
-from pymongo import ReturnDocument
 from utils.security import hash_password
 from utils.auth_jwt import create_access_token
 from utils.permissions import require_permission
 
 from schemas.user import UpdateUserRequest
 from utils.permissions import require_permission, USER_ROLES
+from schemas.user import UserProfileUpdate
+from utils.serializers import serialize_ids_only
+from pymongo import ReturnDocument
+
 
 router = APIRouter(
     prefix="/api/user",
@@ -28,7 +31,7 @@ async def get_user_info(
 ):
     db_user = await users_collection.find_one(
         {"_id": ObjectId(user["_id"])},   
-        {"full_name": 1, "role": 1}
+        {"full_name": 1, "email": 1, "role": 1}
     )
 
     if not db_user:
@@ -36,8 +39,10 @@ async def get_user_info(
 
     return {
         "name": db_user["full_name"],
+        "email": db_user["email"],
         "role": db_user["role"]
     }
+
 
 # company users
 @router.get("/list")
@@ -109,7 +114,33 @@ async def get_single_user(
     }
 
 
-# update company user
+
+# update user profile by user
+@router.patch("/me")
+async def update_profile(
+    payload: UserProfileUpdate,
+    user=Depends(get_current_user)
+):
+    update_data = payload.dict(exclude_unset=True)
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields provided")
+
+    update_data["updated_at"] = datetime.utcnow()
+
+    updated_user = await users_collection.find_one_and_update(
+        {"_id": ObjectId(user["_id"])},
+        {"$set": update_data},
+        return_document=ReturnDocument.AFTER
+    )
+
+    return {
+        "message": "Profile updated successfully",
+        "data": serialize_ids_only(updated_user)
+    }
+
+
+# update company user by admin or owner
 @router.patch("/{user_id}")
 async def update_user(
     user_id: str,
@@ -135,6 +166,19 @@ async def update_user(
 
     # Extract only provided fields
     update_fields = payload.dict(exclude_unset=True)
+
+    if not update_fields:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid fields provided for update"
+        )
+    
+    if target_user["_id"] == ObjectId(current_user["_id"]) and "role" in update_fields:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot change your own role"
+        )
+    
 
     # Handle full_name update
     if "full_name" in update_fields:
@@ -180,19 +224,19 @@ async def update_user(
                     detail="Admin cannot assign Owner role"
                 )
 
-    if not update_fields:
-        raise HTTPException(
-            status_code=400,
-            detail="No valid fields provided for update"
+
+    update_fields["updated_at"] = datetime.utcnow()
+    
+    updated_user = await users_collection.find_one_and_update(
+        {"_id": target_user_id},
+        {"$set": update_fields},
+        return_document=ReturnDocument.AFTER
         )
 
-    await users_collection.update_one(
-        {"_id": target_user_id},
-        {"$set": update_fields}
-    )
-
-    return {"message": "User updated successfully"}
-
+    return {
+        "message": "User updated successfully",
+        "data": serialize_ids_only(updated_user)
+    }
 
 
 # delete user

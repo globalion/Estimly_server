@@ -4,6 +4,7 @@ from datetime import datetime
 
 from database.mongo import companies_collection
 from dependencies import get_current_user
+from pymongo import ReturnDocument
 from schemas.company import CompanyUpdate
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
@@ -42,7 +43,7 @@ async def update_company(
     company = await companies_collection.find_one_and_update(
         {"_id": ObjectId(user["company_id"])},
         {"$set": update_data},
-        return_document=True
+        return_document=ReturnDocument.AFTER
     )
 
     if not company:
