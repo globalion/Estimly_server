@@ -4,12 +4,13 @@ from bson import ObjectId
 from pymongo import ReturnDocument
 from database.mongo import projects_collection, estimation_settings_collection
 #from dependencies import get_current_user
-from schemas.project import ProjectCreate, ProjectUpdate
+from schemas.project import ProjectCreate, ProjectUpdate, ProjectOverrideRequest
 from utils.normalize import normalize
 from utils.serializers import serialize_ids_only
 from services.resource_rates import get_resource_rate_map
 from services.cost_timeline_engine import calculate_estimation
 from utils.permissions import require_permission
+
 
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
 
@@ -56,6 +57,12 @@ async def create_project(
 
     project = {
         **project_data,
+
+        # default lock fields 
+        "is_locked": False,
+        "locked_at": None,
+        "locked_by": None,
+        "lock_reason": None,
 
         "modules": [
             module.model_dump(mode="json") for module in payload.modules
@@ -149,6 +156,14 @@ async def update_project(
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    
+    # Prevent modification if project is locked
+    if project.get("is_locked"):
+        raise HTTPException(
+            status_code=403,
+            detail="Project estimate is locked. Override required."
+            )
     
     
     # Estimator cann not allowed to modify project if project status not under draft
@@ -282,13 +297,118 @@ async def delete_project(
     project_id: str,
     user=Depends(require_permission("projects.delete"))
 ):
-
-    result = await projects_collection.delete_one({
+    
+    # Fetch project first to check lock
+    project = await projects_collection.find_one({
         "_id": ObjectId(project_id),
         "company_id": ObjectId(user["company_id"])
-    })
-
-    if result.deleted_count == 0:
+        })
+    
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.get("is_locked"):
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete locked project. Override required."
+            )
+        
+    await projects_collection.delete_one({
+        "_id": ObjectId(project_id),
+        "company_id": ObjectId(user["company_id"])
+        })
+
 
     return {"message": "Project deleted successfully"}
+
+
+# Lock Project
+@router.patch("/{project_id}/lock")
+async def lock_project(
+    project_id: str,
+    user=Depends(require_permission("projects.lock"))
+):
+    project = await projects_collection.find_one(
+        {"_id": ObjectId(project_id)}
+    )
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.get("is_locked"):
+        raise HTTPException(status_code=400, detail="Project already locked")
+
+    now = datetime.utcnow()
+
+    updated_project = await projects_collection.find_one_and_update(
+        {"_id": ObjectId(project_id)},
+        {
+            "$set": {
+                "is_locked": True,
+                "locked_at": now,
+                "locked_by": ObjectId(user["_id"])
+            }
+        },
+        return_document=True
+    )
+
+    # Audit log
+    # await project_audit_collection.insert_one({
+    #     "project_id": ObjectId(project_id),
+    #     "action": "lock_estimate",
+    #     "performed_by": ObjectId(user["_id"]),
+    #     "timestamp": now
+    # })
+
+    return {
+        "message": "Project estimate locked successfully",
+        "data": serialize_ids_only(updated_project)
+    }
+
+
+# Override Lock
+@router.patch("/{project_id}/override-lock")
+async def override_lock(
+    project_id: str,
+    payload: ProjectOverrideRequest,
+    user=Depends(require_permission("projects.override_lock"))
+):
+    project = await projects_collection.find_one(
+        {"_id": ObjectId(project_id)}
+    )
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not project.get("is_locked"):
+        raise HTTPException(status_code=400, detail="Project is not locked")
+
+    if not payload.override_reason.strip():
+        raise HTTPException(status_code=400, detail="Override reason required")
+
+    now = datetime.utcnow()
+
+    updated_project = await projects_collection.find_one_and_update(
+        {"_id": ObjectId(project_id)},
+        {
+            "$set": {
+                "is_locked": False,
+                "updated_at": now
+            }
+        },
+        return_document=True
+    )
+
+    # Audit log
+    # await project_audit_collection.insert_one({
+    #     "project_id": ObjectId(project_id),
+    #     "action": "override_lock",
+    #     "performed_by": ObjectId(user["_id"]),
+    #     "reason": payload.override_reason,
+    #     "timestamp": now
+    # })
+
+    return {
+        "message": "Project lock overridden successfully",
+        "data": serialize_ids_only(updated_project)
+    }

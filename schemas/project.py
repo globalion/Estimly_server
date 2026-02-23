@@ -52,6 +52,10 @@ class ProjectUpdate(BaseModel):
     modules: Optional[List[ProjectModuleSchema]] = None
 
 
+class ProjectOverrideRequest(BaseModel):
+    override_reason: str
+
+
 class EstimationProjectRequest(BaseModel):
     target_margin: int
     risk_buffer: int
