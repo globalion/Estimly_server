@@ -39,6 +39,22 @@ async def get_user_info(
         "role": db_user["role"]
     }
 
+#get changedpassword info
+@router.get("/security-info")
+async def get_security_info(user=Depends(get_current_user)):
+
+    db_user = await users_collection.find_one(
+        {"_id": ObjectId(user["_id"])},
+        {"password_changed_at": 1}  # Only required field
+    )
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "password_changed_at": db_user.get("password_changed_at")
+    }
+
 
 # company users
 @router.get("/list")
@@ -110,7 +126,6 @@ async def get_single_user(
     }
 
 
-
 # update user profile by user
 @router.patch("/me")
 async def update_profile(
@@ -150,6 +165,13 @@ async def change_password(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Confirm password check
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="New password and confirm password do not match"
+        )
+
     # Verify current password
     if not verify_password(payload.current_password, db_user["password_hash"]):
         raise HTTPException(
@@ -167,28 +189,28 @@ async def change_password(
     # Validate strong password policy
     validate_strong_password(payload.new_password)
 
-    # Hash new password
+        # Hash new password
     new_password_hash = hash_password(payload.new_password)
 
     updated_user = await users_collection.find_one_and_update(
         {"_id": ObjectId(user["_id"])},
         {
             "$set": {
-                "password_hash": new_password_hash,"updated_at": datetime.utcnow()
-                }
+                "password_hash": new_password_hash,
+                "password_changed_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
         },
         return_document=ReturnDocument.AFTER
     )
-    
+
     if not updated_user:
         raise HTTPException(
             status_code=500,
             detail="Failed to update password"
-            )
+        )
     
     return {"message": "Password changed successfully"}
-
-
 
 # update company user by admin or owner
 @router.patch("/{user_id}")
