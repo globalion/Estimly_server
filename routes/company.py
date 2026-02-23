@@ -28,7 +28,7 @@ async def get_company(user=Depends(get_current_user)):
 @router.patch("/")
 async def update_company(
     payload: CompanyUpdate,
-    user=Depends(require_permission("company.settings.manage"))
+    user=Depends(require_permission("company.settings.update"))
 ):
     update_data = payload.dict(exclude_unset=True)
 
