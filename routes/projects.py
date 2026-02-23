@@ -62,8 +62,7 @@ async def create_project(
         "is_locked": False,
         "locked_at": None,
         "locked_by": None,
-        "lock_reason": None,
-
+    
         "modules": [
             module.model_dump(mode="json") for module in payload.modules
         ],
@@ -123,15 +122,40 @@ async def get_project(
     user=Depends(require_permission("projects.read"))
 ):
 
-    project = await projects_collection.find_one({
-        "_id": ObjectId(project_id),
-        "company_id": ObjectId(user["company_id"])
-    })
+    result = await projects_collection.aggregate([
+        {
+            "$match": {
+                "_id": ObjectId(project_id),
+                "company_id": ObjectId(user["company_id"])
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "locked_by",
+                "foreignField": "_id",
+                "as": "locked_user"
+            }
+        },
+        {
+            "$addFields": {
+                "locked_by_name": {
+                    "$arrayElemAt": ["$locked_user.full_name", 0]
+                }
+            }
+        },
+        {
+            "$project": {
+                "locked_user": 0
+            }
+        }
+    ]).to_list(length=1)
 
-    if not project:
+    if not result:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return serialize_ids_only(project)
+    return serialize_ids_only(result[0])
+
 
 
 # Update Project
@@ -346,7 +370,8 @@ async def lock_project(
             "$set": {
                 "is_locked": True,
                 "locked_at": now,
-                "locked_by": ObjectId(user["_id"])
+                "locked_by": ObjectId(user["_id"]),
+                "updated_at": now
             }
         },
         return_document=True
@@ -393,6 +418,8 @@ async def override_lock(
         {
             "$set": {
                 "is_locked": False,
+                "locked_by": None,
+                "locked_at": None,
                 "updated_at": now
             }
         },

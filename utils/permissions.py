@@ -27,7 +27,7 @@ ROLE_PERMISSIONS = {
         "projects.update",
         "projects.delete",
         "projects.change_status",
-         "projects.lock",
+        "projects.lock",
         "projects.override_lock",
 
         "templates.create",
