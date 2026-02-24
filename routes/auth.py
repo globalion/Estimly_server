@@ -112,9 +112,24 @@ async def signup(payload: SignupRequest):
 @router.post("/login")
 async def login(payload: LoginRequest):
     user = await users_collection.find_one({"email": payload.email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # if not user or not verify_password(payload.password, user["password_hash"]):
+    #     raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Email not found
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Email not registered"
+        )
+
+    # Password wrong
+    if not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect password"
+        )
+    
     token = create_access_token({
         "user_id": str(user["_id"]),
         "company_id": str(user["company_id"]),
