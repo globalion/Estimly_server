@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 from database.mongo import users_collection, companies_collection, estimation_settings_collection, client
@@ -10,9 +10,10 @@ from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
 
+MAX_FAILED_ATTEMPTS = 5
+LOCK_DURATION_MINUTES = 15
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
 
 # Signup Endpoint
 @router.post("/signup")
@@ -94,6 +95,8 @@ async def signup(payload: SignupRequest):
                 "password_hash": hash_password(payload.password),
                 "role": "owner",
                 "company_id": company_id,
+                "failed_attempts": 0,
+                "lock_until": None,
                 "created_at": now
             }
 
@@ -107,29 +110,50 @@ async def signup(payload: SignupRequest):
     }
 
 
-
 # Login Endpoint
 @router.post("/login")
 async def login(payload: LoginRequest):
     user = await users_collection.find_one({"email": payload.email})
 
-    # if not user or not verify_password(payload.password, user["password_hash"]):
-    #     raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    # Email not found
     if not user:
+        raise HTTPException(status_code=400, detail="Email is not Registered")
+
+    now = datetime.now(timezone.utc)
+
+    # Check if locked
+    lock_until = user.get("lock_until")
+    
+    if lock_until and now < lock_until:
+        remaining_seconds = int((lock_until - now).total_seconds())
+        remaining_minutes = max(1, remaining_seconds // 60)
         raise HTTPException(
-            status_code=404,
-            detail="Email not registered"
+            status_code=403,
+            detail=f"Account temporarily locked due to multiple failed attempts. Try again in {remaining_minutes} minutes."
+            )
+
+    # Incorrect password
+    if not verify_password(payload.password, user["password_hash"]):
+
+        failed_attempts = user.get("failed_attempts", 0) + 1
+        update_data = {"failed_attempts": failed_attempts}
+
+        if failed_attempts >= MAX_FAILED_ATTEMPTS:
+            update_data["lock_until"] = now + timedelta(minutes=LOCK_DURATION_MINUTES)
+            update_data["failed_attempts"] = 0
+
+        await users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": update_data}
         )
 
-    # Password wrong
-    if not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect password"
-        )
-    
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Success
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"failed_attempts": 0, "lock_until": None}}
+    )
+
     token = create_access_token({
         "user_id": str(user["_id"]),
         "company_id": str(user["company_id"]),
@@ -146,7 +170,6 @@ async def login(payload: LoginRequest):
             "company_id": str(user["company_id"])
         }
     }
-
 
 
 # Forgot Password
