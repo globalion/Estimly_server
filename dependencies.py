@@ -21,7 +21,7 @@ async def get_current_user(
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    user = await users_collection.find_one({"_id": ObjectId(user_id)})
+    user = await users_collection.find_one({"_id": ObjectId(user_id), "is_deleted": {"$ne": True} })
 
     if not user:
         raise HTTPException(status_code=401, detail="User not found")

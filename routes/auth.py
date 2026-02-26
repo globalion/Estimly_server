@@ -97,6 +97,9 @@ async def signup(payload: SignupRequest):
                 "company_id": company_id,
                 "failed_attempts": 0,
                 "lock_until": None,
+                "is_deleted": False,
+                "deleted_at": None,
+                "deleted_by": None,
                 "created_at": now
             }
 
@@ -113,7 +116,10 @@ async def signup(payload: SignupRequest):
 # Login Endpoint
 @router.post("/login")
 async def login(payload: LoginRequest):
-    user = await users_collection.find_one({"email": payload.email})
+    user = await users_collection.find_one({
+        "email": payload.email,
+        "is_deleted": {"$ne": True}
+        })
 
     if not user:
         raise HTTPException(status_code=400, detail="Email is not Registered")
@@ -146,7 +152,7 @@ async def login(payload: LoginRequest):
             {"$set": update_data}
         )
 
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Inpassword")
 
     # Success
     await users_collection.update_one(
@@ -175,7 +181,7 @@ async def login(payload: LoginRequest):
 # Forgot Password
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
-    user = await users_collection.find_one({"email": payload.email})
+    user = await users_collection.find_one({"email": payload.email, "is_deleted": {"$ne": True}})
     
     # Security: always respond the same
     if not user:
@@ -200,7 +206,8 @@ async def reset_password(payload: ResetPasswordRequest):
     if not email:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    user = await users_collection.find_one({"email": email})
+    user = await users_collection.find_one({"email": email, "is_deleted": {"$ne": True}})
+    
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
     

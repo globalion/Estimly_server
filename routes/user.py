@@ -26,7 +26,9 @@ async def get_user_info(
     user=Depends(get_current_user)
 ):
     db_user = await users_collection.find_one(
-        {"_id": ObjectId(user["_id"])},   
+        {"_id": ObjectId(user["_id"]),
+         "is_deleted": {"$ne": True}
+        },   
         {"full_name": 1, "email": 1, "role": 1}
     )
 
@@ -39,12 +41,16 @@ async def get_user_info(
         "role": db_user["role"]
     }
 
+
+
 #get changedpassword info
 @router.get("/security-info")
 async def get_security_info(user=Depends(get_current_user)):
 
     db_user = await users_collection.find_one(
-        {"_id": ObjectId(user["_id"])},
+        {"_id": ObjectId(user["_id"]),
+         "is_deleted": {"$ne": True}
+        },
         {"password_changed_at": 1}  # Only required field
     )
 
@@ -65,7 +71,7 @@ async def get_company_users(
     company_id = ObjectId(current_user["company_id"])
 
     cursor = users_collection.find(
-        {"company_id": company_id},
+        {"company_id": company_id, "is_deleted": {"$ne": True}},
         {
             "full_name": 1,
             "email": 1,
@@ -106,7 +112,8 @@ async def get_single_user(
     user = await users_collection.find_one(
         {
             "_id": target_user_id,
-            "company_id": company_id
+            "company_id": company_id,
+            "is_deleted": {"$ne": True}
         },
         {
             "full_name": 1,
@@ -140,7 +147,7 @@ async def update_profile(
     update_data["updated_at"] = datetime.utcnow()
 
     updated_user = await users_collection.find_one_and_update(
-        {"_id": ObjectId(user["_id"])},
+        {"_id": ObjectId(user["_id"]),"is_deleted": {"$ne": True}},
         {"$set": update_data},
         return_document=ReturnDocument.AFTER
     )
@@ -159,7 +166,7 @@ async def change_password(
 ):
 
     db_user = await users_collection.find_one(
-        {"_id": ObjectId(user["_id"])}
+        {"_id": ObjectId(user["_id"]),  "is_deleted": {"$ne": True} }
     )
 
     if not db_user:
@@ -193,7 +200,7 @@ async def change_password(
     new_password_hash = hash_password(payload.new_password)
 
     updated_user = await users_collection.find_one_and_update(
-        {"_id": ObjectId(user["_id"])},
+        {"_id": ObjectId(user["_id"]), "is_deleted": {"$ne": True} },
         {
             "$set": {
                 "password_hash": new_password_hash,
@@ -211,6 +218,8 @@ async def change_password(
         )
     
     return {"message": "Password changed successfully"}
+
+
 
 # update company user by admin or owner
 @router.patch("/{user_id}")
@@ -230,7 +239,8 @@ async def update_user(
     # Fetch target user
     target_user = await users_collection.find_one({
         "_id": target_user_id,
-        "company_id": company_id
+        "company_id": company_id,
+        "is_deleted": {"$ne": True} 
     })
 
     if not target_user:
@@ -300,7 +310,7 @@ async def update_user(
     update_fields["updated_at"] = datetime.utcnow()
     
     updated_user = await users_collection.find_one_and_update(
-        {"_id": target_user_id},
+        {"_id": target_user_id, "is_deleted": {"$ne": True} },
         {"$set": update_fields},
         return_document=ReturnDocument.AFTER
         )
@@ -311,7 +321,7 @@ async def update_user(
     }
 
 
-# delete user
+# soft delete user
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: str,
@@ -329,7 +339,8 @@ async def delete_user(
     # Fetch target user
     target_user = await users_collection.find_one({
         "_id": target_user_id,
-        "company_id": company_id
+        "company_id": company_id,
+        "is_deleted": {"$ne": True}
     })
 
     if not target_user:
@@ -357,7 +368,8 @@ async def delete_user(
 
         owner_count = await users_collection.count_documents({
             "company_id": company_id,
-            "role": "owner"
+            "role": "owner",
+            "is_deleted": {"$ne": True}
         })
 
         if owner_count <= 1:
@@ -366,11 +378,17 @@ async def delete_user(
                 detail="Cannot delete the last owner of the company"
             )
 
-    await users_collection.delete_one({
-        "_id": target_user_id
-    })
+    await users_collection.update_one(
+        {"_id": target_user_id}, 
+        {
+        "$set": {
+            "is_deleted": True,
+            "deleted_at": datetime.utcnow(),
+            "deleted_by": ObjectId(current_user["_id"])
+            }
+        })
 
-    return {"message": "User permanently deleted successfully"}
+    return {"message": "User deleted successfully"}
 
 
 
@@ -394,7 +412,7 @@ async def invite_user(
         raise HTTPException(status_code=400, detail="Invalid role")
 
     # Check if user already exists
-    existing_user = await users_collection.find_one({"email": payload.email})
+    existing_user = await users_collection.find_one({"email": payload.email, "is_deleted": {"$ne": True} })
     if existing_user:
         raise HTTPException(status_code=400, detail="User already registered")
 
@@ -489,7 +507,7 @@ async def accept_invite(payload: AcceptInviteRequest):
         )
 
     # Ensure email not registered
-    existing_user = await users_collection.find_one({"email": invite["email"]})
+    existing_user = await users_collection.find_one({"email": invite["email"], "is_deleted": {"$ne": True} })
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
     
@@ -503,6 +521,11 @@ async def accept_invite(payload: AcceptInviteRequest):
         "password_hash": hash_password(payload.password),
         "role": invite["role"],
         "company_id": invite["company_id"],
+        "failed_attempts": 0,
+        "lock_until": None,
+        "is_deleted": False,
+        "deleted_at": None,
+        "deleted_by": None,
         "created_at": now
     }
 
