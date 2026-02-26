@@ -117,9 +117,10 @@ async def signup(payload: SignupRequest):
 
 @router.post("/send-email-otp")
 async def send_email_otp(email: str):
+    email_norm = email.strip().lower()  # normalize the input
 
     user = await users_collection.find_one({
-        "email": email,
+        "email": email_norm,
         "is_deleted": {"$ne": True}
     })
 
@@ -139,7 +140,7 @@ async def send_email_otp(email: str):
         }
     )
 
-    await send_verification_otp(email, otp)
+    await send_verification_otp(email_norm, otp)
 
     return {"message": "OTP sent successfully"}
 
