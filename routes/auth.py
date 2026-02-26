@@ -9,6 +9,9 @@ from utils.auth_jwt import create_access_token
 from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
+import random
+from utils.email import send_verification_otp
+
 
 MAX_FAILED_ATTEMPTS = 5
 LOCK_DURATION_MINUTES = 15
@@ -112,6 +115,63 @@ async def signup(payload: SignupRequest):
         "message": "Company and Owner account created successfully"
     }
 
+@router.post("/send-email-otp")
+async def send_email_otp(email: str):
+
+    user = await users_collection.find_one({
+        "email": email,
+        "is_deleted": {"$ne": True}
+    })
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    otp = str(random.randint(100000, 999999))
+    expiry = datetime.utcnow() + timedelta(minutes=5)
+
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "email_otp": otp,
+                "email_otp_expiry": expiry
+            }
+        }
+    )
+
+    await send_verification_otp(email, otp)
+
+    return {"message": "OTP sent successfully"}
+
+@router.post("/verify-email-otp")
+async def verify_email_otp(email: str, otp: str):
+
+    user = await users_collection.find_one({
+        "email": email,
+        "is_deleted": {"$ne": True}
+    })
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.get("email_otp") or user["email_otp"] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    if datetime.utcnow() > user.get("email_otp_expiry"):
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {"is_email_verified": True},
+            "$unset": {
+                "email_otp": "",
+                "email_otp_expiry": ""
+            }
+        }
+    )
+
+    return {"message": "Email verified successfully"}
 
 # Login Endpoint
 @router.post("/login")
@@ -122,7 +182,10 @@ async def login(payload: LoginRequest):
         })
 
     if not user:
-        raise HTTPException(status_code=400, detail="Email is not Registered")
+        if not user.get("is_email_verified"):raise HTTPException(
+        status_code=403,
+        detail="Please verify your email before logging in"
+    )
 
     now = datetime.now(timezone.utc)
 

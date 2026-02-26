@@ -57,3 +57,31 @@ async def send_invite_email(email: str, invite_link: str, role: str, full_name: 
 
     fm = FastMail(conf)
     await fm.send_message(message)
+
+
+import random
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+
+async def send_verification_otp(email: str, otp: str):
+
+    message = MessageSchema(
+        subject="Verify Your Email",
+        recipients=[email],
+        body=f"""
+        <p>Your email verification OTP is:</p>
+
+        <h2 style="letter-spacing:3px;">{otp}</h2>
+
+        <p>This OTP will expire in 5 minutes.</p>
+
+        <br>
+        <p>If you did not request this, please ignore this email.</p>
+        """,
+        subtype="html",
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
