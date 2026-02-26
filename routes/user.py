@@ -9,10 +9,12 @@ from utils.permissions import require_permission, USER_ROLES
 from schemas.invite import InviteRequest, AcceptInviteRequest
 from schemas.change_password import ChangePasswordRequest
 from schemas.user import UpdateUserRequest, UserProfileUpdate
-from utils.email import send_invite_email
+from utils.email import send_invite_email, send_account_restored_email
 from utils.security import verify_password, hash_password, validate_strong_password
 from utils.auth_jwt import create_access_token
 from utils.serializers import serialize_ids_only
+from utils.password_reset import create_reset_token
+
 
 
 router = APIRouter(
@@ -321,6 +323,7 @@ async def update_user(
     }
 
 
+
 # soft delete user
 @router.delete("/{user_id}")
 async def delete_user(
@@ -398,6 +401,7 @@ async def invite_user(
     current_user=Depends(require_permission("users.invite"))
 ):
 
+    company_id = ObjectId(current_user["company_id"])
     role = current_user["role"]
 
     # Prevent admin from inviting Owner
@@ -409,19 +413,64 @@ async def invite_user(
 
     # Validate role
     if payload.role not in USER_ROLES.values():
-        raise HTTPException(status_code=400, detail="Invalid role")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid role"
+        )
 
-    # Check if user already exists
-    existing_user = await users_collection.find_one({"email": payload.email, "is_deleted": {"$ne": True} })
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User already registered")
 
+    # STEP 1: Check if user already exists in this company
+    existing_user = await users_collection.find_one({
+        "email": payload.email,
+        "company_id": company_id
+    })
+
+    # Case 1: Active user already exists
+    if existing_user and not existing_user.get("is_deleted", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+
+    # Case 2: User exists but was deleted → Restore
+    if existing_user and existing_user.get("is_deleted", False):
+
+        await users_collection.update_one(
+            {"_id": existing_user["_id"]},
+            {
+                "$set": {
+                    "is_deleted": False,
+                    "deleted_at": None,
+                    "deleted_by": None,
+                    "role": payload.role, 
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        # Generate password reset token
+        token = create_reset_token(payload.email)
+        reset_link = f"http://localhost:3000/reset-password?token={token}"
+
+        # Send restore email with reset link
+        try:
+            await send_account_restored_email(
+                email=payload.email,
+                reset_link=reset_link,
+                full_name=existing_user.get("full_name", "User")
+            )
+        except Exception as e:
+            print("Restore email failed:", str(e))
+
+        return {"message": "User restored successfully. Reset link sent."}
+
+
+    # STEP 2: Normal Invite Flow (New User)
     now = datetime.utcnow()
 
-    # Check for existing active invite
+    # Check if active invite already exists
     existing_invite = await invites_collection.find_one({
         "email": payload.email,
-        "company_id": ObjectId(current_user["company_id"]),
+        "company_id": company_id,
         "is_used": False,
         "expires_at": {"$gt": now}
     })
@@ -433,8 +482,8 @@ async def invite_user(
 
         invite_doc = {
             "token": token,
-            "company_id": ObjectId(current_user["company_id"]),
-            "full_name": payload.full_name, 
+            "company_id": company_id,
+            "full_name": payload.full_name,
             "email": payload.email,
             "role": payload.role,
             "expires_at": now + timedelta(hours=48),

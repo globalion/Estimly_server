@@ -24,7 +24,6 @@ async def get_company(user=Depends(get_current_user)):
     return serialize_ids_only(company)
 
 
-
 @router.patch("/")
 async def update_company(
     payload: CompanyUpdate,
