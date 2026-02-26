@@ -57,3 +57,37 @@ async def send_invite_email(email: str, invite_link: str, role: str, full_name: 
 
     fm = FastMail(conf)
     await fm.send_message(message)
+
+
+async def send_account_restored_email(email: str, reset_link: str, full_name: str):
+    message = MessageSchema(
+        subject="Your Account Has Been Reactivated",
+        recipients=[email],
+        body=f"""
+        <p>Hello {full_name},</p>
+
+        <p>Your account has been <strong>reactivated</strong> by your administrator.</p>
+
+        <p>For security reasons, please set a new password before logging in.</p>
+
+        <p>
+            <a href="{reset_link}" 
+               style="padding:10px 15px;background-color:#16a34a;color:white;
+               text-decoration:none;border-radius:5px;">
+               Set New Password
+            </a>
+        </p>
+
+        <p>This link will expire in 30 minutes.</p>
+
+        <br>
+        <p>If you did not expect this change, please contact your administrator.</p>
+
+        <br>
+        <p>Regards,<br>Team</p>
+        """,
+        subtype="html",
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
