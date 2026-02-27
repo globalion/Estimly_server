@@ -13,7 +13,6 @@ def create_reset_token(email: str):
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-
 def verify_reset_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
