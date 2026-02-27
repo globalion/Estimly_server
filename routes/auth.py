@@ -9,10 +9,6 @@ from utils.auth_jwt import create_access_token
 from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
-import random
-from utils.email import send_verification_otp
-from database.mongo import pending_verifications_collection
-
 
 MAX_FAILED_ATTEMPTS = 5
 LOCK_DURATION_MINUTES = 15
@@ -174,7 +170,6 @@ async def signup(payload: SignupRequest):
     }
 
 
-
 # Login Endpoint
 @router.post("/login")
 async def login(payload: LoginRequest):
@@ -184,10 +179,7 @@ async def login(payload: LoginRequest):
         })
 
     if not user:
-        if not user.get("is_email_verified"):raise HTTPException(
-        status_code=403,
-        detail="Please verify your email before logging in"
-    )
+        raise HTTPException(status_code=400, detail="Email is not Registered")
 
     now = datetime.now(timezone.utc)
 
