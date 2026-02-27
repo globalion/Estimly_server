@@ -10,14 +10,72 @@ from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
 from utils.email import send_reset_email
 
+from utils.otp import generate_secure_otp
+from utils.email import send_otp_email
+from database.mongo import email_verification_collection
+
+
 MAX_FAILED_ATTEMPTS = 5
 LOCK_DURATION_MINUTES = 15
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+@router.post("/send-otp")
+async def send_otp(email: str):
+
+    # Prevent duplicate signup
+    existing_user = await users_collection.find_one({"email": email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    otp = generate_secure_otp()
+
+    await email_verification_collection.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "otp": otp,
+                "verified": False,
+                "expires_at": datetime.utcnow() + timedelta(minutes=5)
+            }
+        },
+        upsert=True
+    )
+
+    await send_otp_email(email, otp)
+
+    return {"message": "OTP sent successfully"}
+
+@router.post("/verify-otp")
+async def verify_otp(email: str, otp: str):
+
+    record = await email_verification_collection.find_one({"email": email})
+
+    if not record:
+        raise HTTPException(status_code=400, detail="OTP not found")
+
+    if record["expires_at"] < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    if record["otp"] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    await email_verification_collection.update_one(
+        {"email": email},
+        {"$set": {"verified": True}}
+    )
+
+    return {"message": "Email verified successfully"}
+
 # Signup Endpoint
 @router.post("/signup")
 async def signup(payload: SignupRequest):
+
+    # Check if email verified
+    verification = await email_verification_collection.find_one(
+        {"email": payload.email, "verified": True})
+    if not verification:
+        raise HTTPException(status_code=400,detail="Email not verified")
 
     validate_strong_password(payload.password)
 

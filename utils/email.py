@@ -91,3 +91,26 @@ async def send_account_restored_email(email: str, reset_link: str, full_name: st
 
     fm = FastMail(conf)
     await fm.send_message(message)
+
+async def send_otp_email(email: str, otp: str):
+    message = MessageSchema(
+        subject="Email Verification Code",
+        recipients=[email],
+        body=f"""
+        <p>Your verification code is:</p>
+
+        <h2 style="letter-spacing:3px;">{otp}</h2>
+
+        <p>This code will expire in <strong>5 minutes</strong>.</p>
+
+        <br>
+        <p>If you did not request this, please ignore this email.</p>
+
+        <br>
+        <p>Regards,<br>Team</p>
+        """,
+        subtype="html",
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
