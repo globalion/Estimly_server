@@ -15,67 +15,10 @@ LOCK_DURATION_MINUTES = 15
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/pre-signup/send-otp")
-async def pre_signup_send_otp(email: str):
-    email_norm = email.strip().lower()
-    
-    # Check if email is already registered
-    existing_user = await users_collection.find_one({"email": email_norm})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    otp = str(random.randint(100000, 999999))
-    expiry = datetime.utcnow() + timedelta(minutes=5)
-
-    # Upsert OTP in pending_verifications
-    await pending_verifications_collection.update_one(
-        {"email": email_norm},
-        {"$set": {"otp": otp, "expiry": expiry, "created_at": datetime.utcnow()}},
-        upsert=True
-    )
-
-    await send_verification_otp(email_norm, otp)
-
-    return {"message": "OTP sent successfully"}
-
-@router.post("/pre-signup/verify-otp")
-async def pre_signup_verify_otp(email: str, otp: str):
-    email_norm = email.strip().lower()
-
-    record = await pending_verifications_collection.find_one({"email": email_norm})
-
-    if not record:
-        raise HTTPException(status_code=404, detail="No OTP found for this email")
-
-    if record["otp"] != otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
-
-    if datetime.utcnow() > record["expiry"]:
-        raise HTTPException(status_code=400, detail="OTP expired")
-
-    # ✅ Mark as verified instead of deleting
-    await pending_verifications_collection.update_one(
-        {"email": email_norm},
-        {"$set": {"is_verified": True}, "$unset": {"otp": "", "expiry": ""}}
-    )
-
-    return {"message": "Email verified successfully"}
-
 # Signup Endpoint
 @router.post("/signup")
 async def signup(payload: SignupRequest):
 
-     #  Check if email was verified via pre-signup OTP
-    verified = await pending_verifications_collection.find_one({
-        "email": payload.email,
-        "is_verified": True
-    })
-    if not verified:
-        raise HTTPException(
-            status_code=400,
-            detail="Email not verified. Please verify before signing up."
-        )
-    
     validate_strong_password(payload.password)
 
     # Check if email already exists
@@ -168,6 +111,7 @@ async def signup(payload: SignupRequest):
     return {
         "message": "Company and Owner account created successfully"
     }
+
 
 # Login Endpoint
 @router.post("/login")
