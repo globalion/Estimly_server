@@ -1,6 +1,5 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from decouple import config
-import random
 
 conf = ConnectionConfig(
     MAIL_USERNAME=config("MAIL_USERNAME"),
@@ -12,37 +11,6 @@ conf = ConnectionConfig(
     MAIL_SSL_TLS=config("MAIL_SSL_TLS", cast=bool),    # True for SSL
     USE_CREDENTIALS=config("USE_CREDENTIALS", cast=bool),
 )
-
-
-async def send_account_restored_email(email: str):
-    # Example: send an email notifying the account has been restored
-    from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-    conf = ConnectionConfig(
-        MAIL_USERNAME="your_email@example.com",
-        MAIL_PASSWORD="your_password",
-        MAIL_FROM="your_email@example.com",
-        MAIL_PORT=587,
-        MAIL_SERVER="smtp.example.com",
-        MAIL_STARTTLS=True,
-        MAIL_SSL_TLS=False,
-        USE_CREDENTIALS=True,
-    )
-
-    message = MessageSchema(
-        subject="Account Restored",
-        recipients=[email],
-        body=f"""
-        <p>Hello,</p>
-        <p>Your account has been restored successfully.</p>
-        <br>
-        <p>Regards,<br>Team</p>
-        """,
-        subtype="html",
-    )
-
-    fm = FastMail(conf)
-    await fm.send_message(message)
-
 
 async def send_reset_email(email: str, reset_link: str):
     message = MessageSchema(
