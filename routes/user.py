@@ -15,8 +15,6 @@ from utils.auth_jwt import create_access_token
 from utils.serializers import serialize_ids_only
 from utils.password_reset import create_reset_token
 
-
-
 router = APIRouter(
     prefix="/api/user",
     tags=["User"]
@@ -404,6 +402,9 @@ async def invite_user(
     company_id = ObjectId(current_user["company_id"])
     role = current_user["role"]
 
+    email_original = payload.email.strip() 
+    email_norm = email_original.lower()
+
     # Prevent admin from inviting Owner
     if role == "admin" and payload.role == "owner":
         raise HTTPException(
@@ -421,7 +422,7 @@ async def invite_user(
 
     # STEP 1: Check if user already exists in this company
     existing_user = await users_collection.find_one({
-        "email": payload.email,
+        "email_norm": email_norm, 
         "company_id": company_id
     })
 
@@ -448,13 +449,13 @@ async def invite_user(
             }
         )
         # Generate password reset token
-        token = create_reset_token(payload.email)
+        token = create_reset_token(existing_user["email"])
         reset_link = f"http://localhost:3000/reset-password?token={token}"
 
         # Send restore email with reset link
         try:
             await send_account_restored_email(
-                email=payload.email,
+                email=existing_user["email"],
                 reset_link=reset_link,
                 full_name=existing_user.get("full_name", "User")
             )
@@ -469,7 +470,7 @@ async def invite_user(
 
     # Check if active invite already exists
     existing_invite = await invites_collection.find_one({
-        "email": payload.email,
+        "email_norm": email_norm,
         "company_id": company_id,
         "is_used": False,
         "expires_at": {"$gt": now}
@@ -484,7 +485,8 @@ async def invite_user(
             "token": token,
             "company_id": company_id,
             "full_name": payload.full_name,
-            "email": payload.email,
+            "email": email_original,   
+            "email_norm": email_norm,
             "role": payload.role,
             "expires_at": now + timedelta(hours=48),
             "is_used": False,
@@ -497,7 +499,7 @@ async def invite_user(
 
     try:
         await send_invite_email(
-            email=payload.email,
+            email=email_original,
             invite_link=invite_link,
             role=payload.role,
             full_name=payload.full_name
@@ -556,7 +558,12 @@ async def accept_invite(payload: AcceptInviteRequest):
         )
 
     # Ensure email not registered
-    existing_user = await users_collection.find_one({"email": invite["email"], "is_deleted": {"$ne": True} })
+    existing_user = await users_collection.find_one({
+        "email_norm": invite["email_norm"],   
+        "company_id": invite["company_id"],
+        "is_deleted": {"$ne": True}
+    })
+
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
     
@@ -567,6 +574,7 @@ async def accept_invite(payload: AcceptInviteRequest):
     user_doc = {
         "full_name": payload.full_name,
         "email": invite["email"],
+        "email_norm": invite["email_norm"],
         "password_hash": hash_password(payload.password),
         "role": invite["role"],
         "company_id": invite["company_id"],

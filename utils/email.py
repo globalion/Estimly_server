@@ -13,6 +13,7 @@ conf = ConnectionConfig(
     VALIDATE_CERTS=True
 )
 
+
 async def send_reset_email(email: str, reset_link: str):
     message = MessageSchema(
         subject="Reset your password",
@@ -27,7 +28,6 @@ async def send_reset_email(email: str, reset_link: str):
 
     fm = FastMail(conf)
     await fm.send_message(message)
-
 
 
 async def send_invite_email(email: str, invite_link: str, role: str, full_name: str):
@@ -92,6 +92,7 @@ async def send_account_restored_email(email: str, reset_link: str, full_name: st
 
     fm = FastMail(conf)
     await fm.send_message(message)
+
 
 async def send_otp_email(email: str, otp: str):
     message = MessageSchema(
