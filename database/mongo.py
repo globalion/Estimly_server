@@ -6,7 +6,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 if not MONGO_URL:
     raise RuntimeError("MONGO_URL is not set")
 
-client = AsyncIOMotorClient(MONGO_URL)
+client = AsyncIOMotorClient(MONGO_URL, tz_aware=True)
 db = client.get_database()
 
 users_collection = db["users"]
