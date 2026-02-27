@@ -169,8 +169,6 @@ async def signup(payload: SignupRequest):
         "message": "Company and Owner account created successfully"
     }
 
- 
-
 # Login Endpoint
 @router.post("/login")
 async def login(payload: LoginRequest):
