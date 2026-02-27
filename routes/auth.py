@@ -1,18 +1,29 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError  
 
-from database.mongo import users_collection, companies_collection, estimation_settings_collection, client
-from schemas.auth import SignupRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest
+from database.mongo import (
+    users_collection,
+    companies_collection,
+    estimation_settings_collection,
+    client,
+    email_verification_collection
+)
+
+from schemas.auth import (
+    SignupRequest,
+    LoginRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest
+)
+
 from utils.security import hash_password, verify_password, validate_strong_password
 from utils.auth_jwt import create_access_token
 from utils.normalize import normalize
 from utils.password_reset import create_reset_token, verify_reset_token
-from utils.email import send_reset_email
-
+from utils.email import send_reset_email, send_otp_email
 from utils.otp import generate_secure_otp
-from utils.email import send_otp_email
-from database.mongo import email_verification_collection
 
 
 MAX_FAILED_ATTEMPTS = 5
@@ -20,20 +31,29 @@ LOCK_DURATION_MINUTES = 15
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+
+# SEND OTP
 @router.post("/send-otp")
 async def send_otp(email: str):
 
-    # Prevent duplicate signup
-    existing_user = await users_collection.find_one({"email": email})
+    email_original = email.strip()                     
+    email_norm = email_original.lower()                
+
+    existing_user = await users_collection.find_one(
+        {"email_norm": email_norm}                     
+    )
+
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     otp = generate_secure_otp()
 
     await email_verification_collection.update_one(
-        {"email": email},
+        {"email_norm": email_norm},                    
         {
             "$set": {
+                "email": email_original,               
+                "email_norm": email_norm,              
                 "otp": otp,
                 "verified": False,
                 "expires_at": datetime.utcnow() + timedelta(minutes=5)
@@ -42,14 +62,21 @@ async def send_otp(email: str):
         upsert=True
     )
 
-    await send_otp_email(email, otp)
+    await send_otp_email(email_original, otp)
 
     return {"message": "OTP sent successfully"}
 
+
+
+# VERIFY OTP
 @router.post("/verify-otp")
 async def verify_otp(email: str, otp: str):
 
-    record = await email_verification_collection.find_one({"email": email})
+    email_norm = email.strip().lower()                 
+
+    record = await email_verification_collection.find_one(
+        {"email_norm": email_norm}                    
+    )
 
     if not record:
         raise HTTPException(status_code=400, detail="OTP not found")
@@ -61,41 +88,44 @@ async def verify_otp(email: str, otp: str):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     await email_verification_collection.update_one(
-        {"email": email},
+        {"email_norm": email_norm},                    
         {"$set": {"verified": True}}
     )
 
     return {"message": "Email verified successfully"}
 
-# Signup Endpoint
+
+
+# SIGNUP
 @router.post("/signup")
 async def signup(payload: SignupRequest):
 
-    # Check if email verified
+    email_original = payload.email.strip()             
+    email_norm = email_original.lower()                
+
+    # Check email verified
     verification = await email_verification_collection.find_one(
-        {"email": payload.email, "verified": True})
+        {"email_norm": email_norm, "verified": True}  
+    )
+
     if not verification:
-        raise HTTPException(status_code=400,detail="Email not verified")
+        raise HTTPException(status_code=400, detail="Email not verified")
 
     validate_strong_password(payload.password)
 
-    # Check if email already exists
-    existing_user = await users_collection.find_one({"email": payload.email})
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
+    existing_user = await users_collection.find_one(
+        {"email_norm": email_norm}                     
+    )
 
-    # Normalize company name for consistent comparison
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     company_name_norm = normalize(payload.company_name)
 
-    # Check if company already exists
     existing_company = await companies_collection.find_one(
         {"name_normalized": company_name_norm}
     )
 
-    # Prevent auto-joining existing company
     if existing_company:
         raise HTTPException(
             status_code=400,
@@ -104,7 +134,6 @@ async def signup(payload: SignupRequest):
 
     now = datetime.utcnow()
 
-    # Apply MongoDB transaction
     async with await client.start_session() as session:
         async with session.start_transaction():
 
@@ -149,7 +178,8 @@ async def signup(payload: SignupRequest):
 
             user_doc = {
                 "full_name": payload.full_name,
-                "email": payload.email,
+                "email": email_original,               
+                "email_norm": email_norm,              
                 "password_hash": hash_password(payload.password),
                 "role": "owner",
                 "company_id": company_id,
@@ -161,41 +191,47 @@ async def signup(payload: SignupRequest):
                 "created_at": now
             }
 
-            await users_collection.insert_one(
-                user_doc,
-                session=session
-            )
+            try:
+                await users_collection.insert_one(
+                    user_doc,
+                    session=session
+                )
+            except DuplicateKeyError:                  
+                raise HTTPException(
+                    status_code=400,
+                    detail="Email already registered"
+                )
 
-    return {
-        "message": "Company and Owner account created successfully"
-    }
+    return {"message": "Company and Owner account created successfully"}
 
 
-# Login Endpoint
+
+# LOGIN
 @router.post("/login")
 async def login(payload: LoginRequest):
+
+    email_norm = payload.email.strip().lower()         
+
     user = await users_collection.find_one({
-        "email": payload.email,
+        "email_norm": email_norm,                      
         "is_deleted": {"$ne": True}
-        })
+    })
 
     if not user:
         raise HTTPException(status_code=400, detail="Email is not Registered")
 
     now = datetime.now(timezone.utc)
 
-    # Check if locked
     lock_until = user.get("lock_until")
-    
+
     if lock_until and now < lock_until:
         remaining_seconds = int((lock_until - now).total_seconds())
         remaining_minutes = max(1, remaining_seconds // 60)
         raise HTTPException(
             status_code=403,
-            detail=f"Account temporarily locked due to multiple failed attempts. Try again in {remaining_minutes} minutes."
-            )
+            detail=f"Account temporarily locked. Try again in {remaining_minutes} minutes."
+        )
 
-    # Incorrect password
     if not verify_password(payload.password, user["password_hash"]):
 
         failed_attempts = user.get("failed_attempts", 0) + 1
@@ -210,9 +246,8 @@ async def login(payload: LoginRequest):
             {"$set": update_data}
         )
 
-        raise HTTPException(status_code=401, detail="Inpassword")
+        raise HTTPException(status_code=401, detail="Invalid password")
 
-    # Success
     await users_collection.update_one(
         {"_id": user["_id"]},
         {"$set": {"failed_attempts": 0, "lock_until": None}}
@@ -229,62 +264,73 @@ async def login(payload: LoginRequest):
         "user": {
             "id": str(user["_id"]),
             "full_name": user["full_name"],
-            "email": user["email"],
+            "email": user["email"],   
             "role": user["role"],
             "company_id": str(user["company_id"])
         }
     }
 
 
-# Forgot Password
+
+# FORGOT PASSWORD
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest):
-    user = await users_collection.find_one({"email": payload.email, "is_deleted": {"$ne": True}})
-    
-    # Security: always respond the same
+
+    email_norm = payload.email.strip().lower()         
+
+    user = await users_collection.find_one({
+        "email_norm": email_norm,                      
+        "is_deleted": {"$ne": True}
+    })
+
     if not user:
         return {"success": False, "message": "Email is not registered"}
 
-    # Generate JWT reset token
-    token = create_reset_token(payload.email)
+    token = create_reset_token(user["email"])          
 
     reset_link = f"http://localhost:3000/reset-password?token={token}"
 
-    # Send reset email
-    await send_reset_email(payload.email, reset_link)
+    await send_reset_email(user["email"], reset_link)
 
     return {"success": True, "message": "Reset link sent to your email"}
 
 
 
-# Reset Password
+# RESET PASSWORD
 @router.post("/reset-password")
 async def reset_password(payload: ResetPasswordRequest):
+
     email = verify_reset_token(payload.token)
+
     if not email:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    user = await users_collection.find_one({"email": email, "is_deleted": {"$ne": True}})
-    
+    email_norm = email.strip().lower()                 
+
+    user = await users_collection.find_one({
+        "email_norm": email_norm,                      
+        "is_deleted": {"$ne": True}
+    })
+
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
-    
-    
+
     validate_strong_password(payload.new_password)
 
-    # new password should not be same as old password
     if verify_password(payload.new_password, user["password_hash"]):
         raise HTTPException(
             status_code=400,
-            detail="New password cannot be the same as your old password"
+            detail="New password cannot be the same as old password"
         )
 
     await users_collection.update_one(
         {"_id": user["_id"]},
         {
             "$set": {
-            "password_hash": hash_password(payload.new_password),
-            "updated_at": datetime.utcnow()
-        } })
+                "password_hash": hash_password(payload.new_password),
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
 
-    return {"success": True, "message": "Password reset successfully"}  
+    return {"success": True, "message": "Password reset successfully"}
