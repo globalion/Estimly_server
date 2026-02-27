@@ -56,7 +56,7 @@ async def send_otp(email: str):
                 "email_norm": email_norm,              
                 "otp": otp,
                 "verified": False,
-                "expires_at": datetime.utcnow() + timedelta(minutes=5)
+                "expires_at" : datetime.now(timezone.utc) + timedelta(minutes=5)
             }
         },
         upsert=True
@@ -81,7 +81,7 @@ async def verify_otp(email: str, otp: str):
     if not record:
         raise HTTPException(status_code=400, detail="OTP not found")
 
-    if record["expires_at"] < datetime.utcnow():
+    if record["expires_at"] < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired")
 
     if record["otp"] != otp:

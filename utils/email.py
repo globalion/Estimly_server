@@ -10,6 +10,7 @@ conf = ConnectionConfig(
     MAIL_STARTTLS=config("MAIL_STARTTLS", cast=bool),  # False for SSL
     MAIL_SSL_TLS=config("MAIL_SSL_TLS", cast=bool),    # True for SSL
     USE_CREDENTIALS=config("USE_CREDENTIALS", cast=bool),
+    VALIDATE_CERTS=True
 )
 
 async def send_reset_email(email: str, reset_link: str):
