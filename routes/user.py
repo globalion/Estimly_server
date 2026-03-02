@@ -3,7 +3,8 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from pymongo import ReturnDocument
-from database.mongo import users_collection, invites_collection
+from pymongo.errors import DuplicateKeyError
+from database.mongo import users_collection, invites_collection, client
 from dependencies import get_current_user
 from utils.permissions import require_permission, USER_ROLES
 from schemas.invite import InviteRequest, AcceptInviteRequest
@@ -541,52 +542,71 @@ async def accept_invite(payload: AcceptInviteRequest):
 
     now = datetime.utcnow()
 
-    invite = await invites_collection.find_one_and_update(
-        {
-            "token": payload.token,
-            "is_used": False,
-            "expires_at": {"$gt": now}
-        },
-        {"$set": {"is_used": True}},
-        return_document=ReturnDocument.AFTER
-    )
-
-    if not invite:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid, expired, or already used invite token"
-        )
-
-    # Ensure email not registered
-    existing_user = await users_collection.find_one({
-        "email_norm": invite["email_norm"],   
-        "company_id": invite["company_id"],
-        "is_deleted": {"$ne": True}
-    })
-
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User already exists")
-    
-
     validate_strong_password(payload.password)
 
-    # Create user
-    user_doc = {
-        "full_name": payload.full_name,
-        "email": invite["email"],
-        "email_norm": invite["email_norm"],
-        "password_hash": hash_password(payload.password),
-        "role": invite["role"],
-        "company_id": invite["company_id"],
-        "failed_attempts": 0,
-        "lock_until": None,
-        "is_deleted": False,
-        "deleted_at": None,
-        "deleted_by": None,
-        "created_at": now
-    }
+    async with await client.start_session() as session:
+        async with session.start_transaction():
 
-    result = await users_collection.insert_one(user_doc)
+            # Find and lock invite (mark as used)
+            invite = await invites_collection.find_one_and_update(
+                {
+                    "token": payload.token,
+                    "is_used": False,
+                    "expires_at": {"$gt": now}
+                },
+                {"$set": {"is_used": True}},
+                return_document=ReturnDocument.AFTER,
+                session=session
+            )
+
+            if not invite:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid, expired, or already used invite token"
+                )
+
+            # Check if user already exists
+            existing_user = await users_collection.find_one(
+                {
+                    "email_norm": invite["email_norm"],
+                    "company_id": invite["company_id"],
+                    "is_deleted": {"$ne": True}
+                },
+                session=session
+            )
+
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail="User already exists"
+                )
+
+            # Create user
+            user_doc = {
+                "full_name": payload.full_name,
+                "email": invite["email"],
+                "email_norm": invite["email_norm"],
+                "password_hash": hash_password(payload.password),
+                "role": invite["role"],
+                "company_id": invite["company_id"],
+                "failed_attempts": 0,
+                "lock_until": None,
+                "is_deleted": False,
+                "deleted_at": None,
+                "deleted_by": None,
+                "created_at": now
+            }
+
+            try:
+                result = await users_collection.insert_one(
+                    user_doc,
+                    session=session
+                )
+            except DuplicateKeyError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="User already exists"
+                )
 
     # Generate JWT
     access_token = create_access_token({
