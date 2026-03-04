@@ -115,6 +115,7 @@ async def get_projects(
     return [serialize_ids_only(p) for p in projects]
 
 
+
 # Get Single Project
 @router.get("/{project_id}")
 async def get_project(
@@ -155,6 +156,47 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return serialize_ids_only(result[0])
+
+
+
+# for get data for export pdf
+@router.get("/{project_id}/export")
+async def export_project(
+    project_id: str,
+    user=Depends(require_permission("projects.read"))
+):
+
+    project = await projects_collection.find_one({
+        "_id": ObjectId(project_id),
+        "company_id": ObjectId(user["company_id"])
+    })
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    snapshot = project.get("estimation_snapshot")
+
+    if not snapshot:
+        raise HTTPException(
+            status_code=400,
+            detail="Estimation not calculated"
+        )
+
+    return {
+        "project": {
+            "name": project["name"],
+            "client_name": project["client_name"],
+            "description": project["description"],
+            "status": project["status"],
+            "estimation_method": project["estimation_technique"]["name"]
+        },
+
+        "totals": snapshot["totals"],
+        "pricing": snapshot["pricing"],
+        "resources": snapshot["resource_allocation"],
+        "timeline": snapshot["timeline"],
+        "wbs": snapshot["wbs"]["modules"]
+    }
 
 
 

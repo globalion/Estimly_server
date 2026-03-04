@@ -34,8 +34,14 @@ def calculate_estimation(project, resource_rates, settings):
         module_hours = 0
         module_cost = 0
 
+        features = []
+
         for feature in module["features"]:
+
+            tasks_output = []
+
             for task in feature["tasks"]:
+
                 adj_hours, cost, role, hourly_rate = calculate_task_cost(
                     task,
                     resource_rates,
@@ -51,10 +57,27 @@ def calculate_estimation(project, resource_rates, settings):
                 resource_hours[role] = resource_hours.get(role, 0) + adj_hours
                 used_roles_snapshot[role] = hourly_rate
 
+                # store task cost
+                tasks_output.append({
+                    "name": task["name"],
+                    "hours": task["hours"],
+                    "adjusted_hours": round(adj_hours, 1),
+                    "role": role,
+                    "level": task["level"],
+                    "hourly_rate": hourly_rate,
+                    "cost": round(cost)
+                })
+
+            features.append({
+                "name": feature["name"],
+                "tasks": tasks_output
+            })
+
         modules.append({
             "name": module["name"],
             "hours": round(module_hours, 1),
-            "cost": round(module_cost)
+            "cost": round(module_cost),
+            "features": features
         })
 
     # Pricing 
