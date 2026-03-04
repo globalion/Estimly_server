@@ -34,7 +34,7 @@ async def create_custom_template(
     result = await custom_templates_collection.insert_one(template_doc)
 
     return {
-        "message": "Custom template created",
+        "message": "Custom template created successfully",
         "template_id": str(result.inserted_id)
     }
 

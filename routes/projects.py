@@ -188,7 +188,7 @@ async def export_project(
             "client_name": project["client_name"],
             "description": project["description"],
             "status": project["status"],
-            "estimation_method": project["estimation_technique"]["name"]
+            "estimation_technique": project.get("estimation_technique", {})
         },
 
         "totals": snapshot["totals"],
