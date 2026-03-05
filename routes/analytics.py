@@ -12,29 +12,30 @@ async def get_analytics_summary(user=Depends(get_current_user)):
         company_object_id = ObjectId(user["company_id"])
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid company id")
+    
 
     pipeline = [
-        {
-            "$match": {
-                "company_id": company_object_id
-            }
-        },
-        {
-            "$group": {
-                "_id": None,
-                "total_revenue": {
-                    "$sum": {"$ifNull": ["$estimation_snapshot.total_revenue", 0]}
-                },
-                "total_cost": {
-                    "$sum": {"$ifNull": ["$estimation_snapshot.total_cost", 0]}
-                },
-                "total_hours": {
-                    "$sum": {"$ifNull": ["$estimation_snapshot.total_hours", 0]}
-                },
-                "total_projects": {"$sum": 1}
-            }
+    {
+        "$match": {
+            "company_id": company_object_id
         }
-    ]
+    },
+    {
+        "$group": {
+            "_id": None,
+            "total_revenue": {
+                "$sum": {"$ifNull": ["$estimation_snapshot.pricing.final_price", 0]}
+            },
+            "total_cost": {
+                "$sum": {"$ifNull": ["$estimation_snapshot.totals.base_cost", 0]}
+            },
+            "total_hours": {
+                "$sum": {"$ifNull": ["$estimation_snapshot.totals.hours", 0]}
+            },
+            "total_projects": {"$sum": 1}
+        }
+    }
+]
 
     cursor = projects_collection.aggregate(pipeline)
     result = await cursor.to_list(length=1)
@@ -62,12 +63,12 @@ async def get_analytics_summary(user=Depends(get_current_user)):
     person_months = round(total_hours / 160, 2) if total_hours else 0  #Assume 1 person month = 160 hours
 
     return {
-        "total_projects": total_projects,
-        "total_revenue": round(total_revenue, 2),
-        "total_cost": round(total_cost, 2),
-        "total_profit": round(total_profit, 2),
-        "avg_margin_percent": round(avg_margin, 2),
-        "total_hours": round(total_hours, 2),
-        "person_months": person_months
-    }
+    "total_projects": total_projects,
+    "total_revenue": f"${total_revenue:,.0f}",
+    "total_cost": f"${round(total_cost):,}",
+    "total_profit": f"${round(total_profit):,}",
+    "avg_margin_percent": f"{round(avg_margin,1)}%",
+    "total_hours": f"{round(total_hours):,}",
+    "person_months": round(person_months)
+}
 
