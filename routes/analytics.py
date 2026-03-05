@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from database.mongo import projects_collection
 from dependencies import get_current_user
+import math
+
 
 router = APIRouter(prefix="/api/analytics",tags=["Advanced Analytics"])
 
@@ -58,17 +60,24 @@ async def get_analytics_summary(user=Depends(get_current_user)):
     total_hours = data.get("total_hours", 0)
     total_projects = data.get("total_projects", 0)
 
+    # ROUND FIRST
+    total_revenue = round(total_revenue)
+    total_cost = round(total_cost)
+    total_hours = float(total_hours)
+    
+    
     total_profit = total_revenue - total_cost
     avg_margin = (total_profit / total_cost * 100) if total_cost else 0   #Margin % = (Profit / cost) × 100
-    person_months = round(total_hours / 160, 2) if total_hours else 0  #Assume 1 person month = 160 hours
-
+    person_months = math.ceil(total_hours / 160) if total_hours else 0  #Assume 1 person month = 160 hours
+    
     return {
     "total_projects": total_projects,
-    "total_revenue": f"${total_revenue:,.0f}",
-    "total_cost": f"${round(total_cost):,}",
-    "total_profit": f"${round(total_profit):,}",
+    "total_revenue": f"${total_revenue:,}",
+    "total_cost": f"${total_cost:,}",
+    "total_profit": f"${total_profit:,}",
     "avg_margin_percent": f"{round(avg_margin,1)}%",
-    "total_hours": f"{round(total_hours):,}",
-    "person_months": round(person_months)
+    "total_hours": round(total_hours,2),
+    "person_months": person_months
 }
+
 
