@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from database.mongo import projects_collection
+from datetime import datetime, timedelta
 from dependencies import get_current_user
 import math
 
@@ -80,4 +81,102 @@ async def get_analytics_summary(user=Depends(get_current_user)):
     "person_months": person_months
 }
 
+@router.get("/revenue-trend")
+async def revenue_trend():
 
+    six_months_ago = datetime.utcnow() - timedelta(days=180)
+
+    pipeline = [
+
+        {
+            "$match": {
+                "created_at": {"$gte": six_months_ago}
+            }
+        },
+
+        {
+            "$group": {
+                "_id": {
+                    "year": {"$year": "$created_at"},
+                    "month": {"$month": "$created_at"}
+                },
+                "revenue": {"$sum": "$revenue"},
+                "cost": {"$sum": "$cost"}
+            }
+        },
+
+        {"$sort": {"_id.year": 1, "_id.month": 1}}
+
+    ]
+
+    result = await projects_collection.aggregate(pipeline).to_list(None)
+
+    data = []
+
+    for r in result:
+
+        revenue = r["revenue"]
+        cost = r["cost"]
+
+        data.append({
+            "month": f"{r['_id']['year']}-{str(r['_id']['month']).zfill(2)}",
+            "revenue": revenue,
+            "cost": cost,
+            "profit": revenue - cost
+        })
+
+    return data
+
+@router.get("/margin-analysis")
+async def margin_analysis():
+
+    projects = []
+
+    async for project in projects_collection.find():
+
+        margin = project["revenue"] - project["cost"]
+
+        margin_percent = 0
+        if project["revenue"] > 0:
+            margin_percent = (margin / project["revenue"]) * 100
+
+        projects.append({
+
+            "project": project["name"],
+            "revenue": project["revenue"],
+            "marginPercent": round(margin_percent,2),
+            "hours": project["hours"],
+
+            # useful for tooltip
+            "profit": margin,
+            "cost": project["cost"]
+        })
+
+    return projects
+
+@router.get("/project-timeline")
+async def project_timeline(status: str = None):
+
+    query = {}
+
+    if status:
+        query["status"] = status
+
+    timeline = []
+
+    async for project in projects_collection.find(query):
+
+        duration = (project["end_date"] - project["start_date"]).days
+
+        timeline.append({
+
+            "project": project["name"],
+            "status": project["status"],
+            "startDate": project["start_date"],
+            "endDate": project["end_date"],
+            "durationDays": duration,
+            "value": project["revenue"]
+
+        })
+
+    return timeline
