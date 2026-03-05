@@ -28,6 +28,7 @@ def calculate_estimation(project, resource_rates, settings):
 
     modules = []
     resource_hours = {}
+    resource_costs = {}
     used_roles_snapshot = {}
 
     for module in project["modules"]:
@@ -55,6 +56,7 @@ def calculate_estimation(project, resource_rates, settings):
                 total_cost += cost
 
                 resource_hours[role] = resource_hours.get(role, 0) + adj_hours
+                resource_costs[role] = resource_costs.get(role, 0) + cost
                 used_roles_snapshot[role] = hourly_rate
 
                 # store task cost
@@ -120,6 +122,7 @@ def calculate_estimation(project, resource_rates, settings):
             "role": role,
             "hours": round(hrs, 1),
             "hourly_rate": used_roles_snapshot[role],
+            "cost": round(resource_costs[role]),
             "percentage": round((hrs / total_hours) * 100, 1)
         }
         for role, hrs in resource_hours.items()
