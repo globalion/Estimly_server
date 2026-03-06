@@ -148,55 +148,106 @@ async def revenue_trend(user=Depends(get_current_user)):
     return data
 
 @router.get("/margin-analysis")
-async def margin_analysis():
+async def margin_analysis(user=Depends(get_current_user)):
 
-    projects = []
+    company_id = ObjectId(user["company_id"])
 
-    async for project in projects_collection.find():
+    pipeline = [
 
-        margin = project["revenue"] - project["cost"]
+        {
+            "$match": {
+                "company_id": company_id
+            }
+        },
 
-        margin_percent = 0
-        if project["revenue"] > 0:
-            margin_percent = (margin / project["revenue"]) * 100
+        {
+            "$addFields": {
+                "revenue": {"$ifNull": ["$revenue", 0]},
+                "cost": {"$ifNull": ["$cost", 0]},
+                "hours": {"$ifNull": ["$hours", 0]}
+            }
+        },
 
-        projects.append({
+        {
+            "$addFields": {
+                "profit": {"$subtract": ["$revenue", "$cost"]},
+                "marginPercent": {
+                    "$cond": [
+                        {"$gt": ["$revenue", 0]},
+                        {
+                            "$multiply": [
+                                {"$divide": [
+                                    {"$subtract": ["$revenue", "$cost"]},
+                                    "$revenue"
+                                ]},
+                                100
+                            ]
+                        },
+                        0
+                    ]
+                }
+            }
+        },
 
-            "project": project["name"],
-            "revenue": project["revenue"],
-            "marginPercent": round(margin_percent,2),
-            "hours": project["hours"],
+        {
+            "$project": {
+                "_id": 0,
+                "project": "$name",
+                "revenue": {"$round": ["$revenue", 2]},
+                "cost": {"$round": ["$cost", 2]},
+                "profit": {"$round": ["$profit", 2]},
+                "marginPercent": {"$round": ["$marginPercent", 2]},
+                "hours": {"$round": ["$hours", 2]}
+            }
+        }
 
-            # useful for tooltip
-            "profit": margin,
-            "cost": project["cost"]
-        })
+    ]
 
-    return projects
+    projects = await projects_collection.aggregate(pipeline).to_list(length=None)
+
+    return {
+        "projects": projects
+    }
+
+
+
 
 @router.get("/project-timeline")
 async def project_timeline(status: str = None):
 
-    query = {}
+    pipeline = []
 
+    # Filter by status if provided
     if status:
-        query["status"] = status
-
-    timeline = []
-
-    async for project in projects_collection.find(query):
-
-        duration = (project["end_date"] - project["start_date"]).days
-
-        timeline.append({
-
-            "project": project["name"],
-            "status": project["status"],
-            "startDate": project["start_date"],
-            "endDate": project["end_date"],
-            "durationDays": duration,
-            "value": project["revenue"]
-
+        pipeline.append({
+            "$match": {"status": status}
         })
+
+    pipeline.extend([
+        {
+            "$addFields": {
+                "durationDays": {
+                    "$dateDiff": {
+                        "startDate": "$start_date",
+                        "endDate": "$end_date",
+                        "unit": "day"
+                    }
+                }
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "project": "$name",
+                "status": 1,
+                "startDate": "$start_date",
+                "endDate": "$end_date",
+                "durationDays": 1,
+                "value": "$revenue"
+            }
+        }
+    ])
+
+    timeline = await projects_collection.aggregate(pipeline).to_list(length=None)
 
     return timeline
