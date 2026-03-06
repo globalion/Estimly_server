@@ -166,7 +166,8 @@ async def margin_analysis(user=Depends(get_current_user)):
                 "cost": {"$ifNull": ["$estimation_snapshot.totals.base_cost", 0]},
                 "hours": {"$ifNull": ["$estimation_snapshot.totals.hours", 0]},
                 "status": {"$ifNull": ["$status", "draft"]},
-                "target_margin": {"$ifNull": ["$target_margin",0]},
+                "target_margin": {"$ifNull": ["$target_margin", 0]},
+                "complexity": {"$ifNull": ["$complexity", "Unknown"]}
             }
         },
 
@@ -175,7 +176,7 @@ async def margin_analysis(user=Depends(get_current_user)):
                 "profit": {"$subtract": ["$revenue", "$cost"]},
                 "marginPercent": {
                     "$cond": [
-                        {"$gt": ["$cost", 0]},   # divide by cost
+                        {"$gt": ["$cost", 0]},
                         {
                             "$multiply": [
                                 {
@@ -197,6 +198,7 @@ async def margin_analysis(user=Depends(get_current_user)):
             "$project": {
                 "_id": 0,
                 "project": "$name",
+                "complexity": 1,
                 "revenue": {"$round": ["$revenue", 2]},
                 "cost": {"$round": ["$cost", 2]},
                 "profit": {"$round": ["$profit", 2]},
@@ -215,29 +217,60 @@ async def margin_analysis(user=Depends(get_current_user)):
         "projects": projects
     }
 
+
+
 @router.get("/project-timeline")
-async def project_timeline(status: str = None):
+async def project_timeline(status: str = None, user=Depends(get_current_user)):
 
-    pipeline = []
+    company_id = ObjectId(user["company_id"])
 
-    # Filter by status if provided
+    pipeline = [
+        {
+            "$match": {
+                "company_id": company_id
+            }
+        }
+    ]
+
+    # optional status filter
     if status:
         pipeline.append({
             "$match": {"status": status}
         })
 
     pipeline.extend([
+
         {
             "$addFields": {
-                "durationDays": {
-                    "$dateDiff": {
-                        "startDate": "$start_date",
-                        "endDate": "$end_date",
-                        "unit": "day"
-                    }
+                "revenue": {
+                    "$ifNull": ["$estimation_snapshot.pricing.final_price", 0]
                 }
             }
         },
+
+        {
+            "$addFields": {
+                "durationDays": {
+                    "$cond": [
+                        {
+                            "$and": [
+                                {"$ne": ["$start_date", None]},
+                                {"$ne": ["$end_date", None]}
+                            ]
+                        },
+                        {
+                            "$dateDiff": {
+                                "startDate": "$start_date",
+                                "endDate": "$end_date",
+                                "unit": "day"
+                            }
+                        },
+                        0
+                    ]
+                }
+            }
+        },
+
         {
             "$project": {
                 "_id": 0,
@@ -246,11 +279,14 @@ async def project_timeline(status: str = None):
                 "startDate": "$start_date",
                 "endDate": "$end_date",
                 "durationDays": 1,
-                "value": "$revenue"
+                "value": {"$round": ["$revenue", 2]}
             }
         }
+
     ])
 
     timeline = await projects_collection.aggregate(pipeline).to_list(length=None)
 
-    return timeline
+    return {
+        "timeline": timeline
+    }
