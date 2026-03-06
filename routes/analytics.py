@@ -82,7 +82,12 @@ async def get_analytics_summary(user=Depends(get_current_user)):
 }
 
 @router.get("/revenue-trend")
-async def revenue_trend():
+async def revenue_trend(user=Depends(get_current_user)):
+
+    try:
+        company_object_id = ObjectId(user["company_id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid company id")
 
     six_months_ago = datetime.utcnow() - timedelta(days=180)
 
@@ -90,6 +95,7 @@ async def revenue_trend():
 
         {
             "$match": {
+                "company_id": company_object_id,
                 "created_at": {"$gte": six_months_ago}
             }
         },
@@ -100,8 +106,20 @@ async def revenue_trend():
                     "year": {"$year": "$created_at"},
                     "month": {"$month": "$created_at"}
                 },
-                "revenue": {"$sum": "$revenue"},
-                "cost": {"$sum": "$cost"}
+
+                "revenue": {
+                    "$sum": {
+                        "$ifNull": ["$estimation_snapshot.pricing.final_price", 0]
+                    }
+                },
+
+                "cost": {
+                    "$sum": {
+                        "$ifNull": ["$estimation_snapshot.totals.base_cost", 0]
+                    }
+                },
+
+                "projects": {"$sum": 1}
             }
         },
 
@@ -115,14 +133,16 @@ async def revenue_trend():
 
     for r in result:
 
-        revenue = r["revenue"]
-        cost = r["cost"]
+        revenue = round(r.get("revenue", 0))
+        cost = round(r.get("cost", 0))
+        projects = r.get("projects", 0)
 
         data.append({
-            "month": f"{r['_id']['year']}-{str(r['_id']['month']).zfill(2)}",
+            "month": f"{r['_id']['year']}-{str(r['_id']['month']).zfill(2)}-01",
             "revenue": revenue,
             "cost": cost,
-            "profit": revenue - cost
+            "profit": revenue - cost,
+            "projects": projects
         })
 
     return data
